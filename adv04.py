@@ -10,3 +10,12 @@ with open("input4") as inp:
         count += all(v==1 for k, v in counter.items())
 
 print(count)
+
+# second solution
+with open("input4") as inp:
+    for line in inp:
+        l = line.split()
+        s = set(''.join(map(sorted, l)))
+        count2 += len(l) == len(s)
+
+print(count2)
