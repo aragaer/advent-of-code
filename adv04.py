@@ -12,10 +12,11 @@ with open("input4") as inp:
 print(count)
 
 # second solution
+count2 = 0
 with open("input4") as inp:
     for line in inp:
         l = line.split()
-        s = set(''.join(map(sorted, l)))
+        s = set(''.join(sorted(x)) for x in l)
         count2 += len(l) == len(s)
 
 print(count2)
