@@ -28,4 +28,4 @@ for p in range(len(data)//16):
 
 print(res)
 
-print(''.join("%x" % t for t in res))
+print(''.join("%02x" % t for t in res))
