@@ -13,21 +13,7 @@ with open("input11") as inp:
 m = 0
 
 def away(x, y):
-    x = abs(x)
-    y = abs(y)
-
-    result = 0
-
-    while x and y:
-        if x == y:
-            x -= 1
-            y -= 1
-        elif x > y:
-            x -= 2
-        elif x < y:
-            y -= 2
-        result += 1
-    return result
+    return (abs(x)+abs(y))//2
 
 for step in steps.split(','):
     if step == 'ne':
