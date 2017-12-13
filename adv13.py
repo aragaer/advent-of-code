@@ -16,17 +16,16 @@ def step(position, time):
         caught = True
     return cost, caught
 
+last = max(layers.keys())+1
 def cost_for_delay(delay, cost_only=False):
-    last = max(layers.keys())+1
 
     position = 0
     cost = 0
-    while position < last:
+    for position in range(last):
         c, caught = step(position, position + delay)
         if caught and not cost_only:
             return 0, True
         cost += c
-        position += 1
 
     return cost, False
 
