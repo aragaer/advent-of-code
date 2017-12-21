@@ -2,24 +2,6 @@
 
 from itertools import chain
 
-rules = {}
-
-with open("input21") as inp:
-    for line in inp:
-        k, v = line.split('=>')
-        rules[k.strip()] = v.strip()
-
-data = [[0, 1, 0], [0, 0, 1], [1, 1, 1]]
-
-if len(rules) == 2:
-    iter = 2
-else:
-    iter = 5
-
-
-def cut(x, y, sz):
-    return list(l[y*sz:y*sz+sz] for l in data[x*sz:x*sz+sz])
-
 def to_text(piece):
     return '/'.join(''.join('#' if x else '.' for x in l) for l in piece)
 
@@ -39,15 +21,32 @@ def rotate(piece):
             result[j].append(x)
     return result
 
+rules = {}
+
+with open("input21") as inp:
+    for line in inp:
+        k, v = line.split('=>')
+        res = from_text(v.strip())
+        piece = from_text(k.strip())
+        for p in (piece, flip(piece)):
+            for _ in range(4):
+                rules[to_text(p)] = res
+                p = rotate(p)
+
+data = [[0, 1, 0], [0, 0, 1], [1, 1, 1]]
+
+if len(rules) == 2:
+    iter = 2
+else:
+    iter = 5
+
+
+def cut(x, y, sz):
+    return list(l[y*sz:y*sz+sz] for l in data[x*sz:x*sz+sz])
+
 def replacement(x, y, sz):
     piece = cut(x, y, sz)
-    for p in (piece, flip(piece)):
-        for _ in range(4):
-            if to_text(p) in rules:
-                return from_text(rules[to_text(p)])
-            else:
-                p = rotate(p)
-    raise Exception("No rule for {}".format(to_text(piece)))
+    return rules[to_text(piece)]
 
 
 iter = 18
