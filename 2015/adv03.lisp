@@ -1,8 +1,9 @@
 (defmacro move (x y)
-  `(cond ((eql c #\<) (decf ,x))
-	 ((eql c #\>) (incf ,x))
-	 ((eql c #\^) (incf ,y))
-	 ((eql c #\v) (decf ,y))))
+  `(ecase c
+     (#\< (decf ,x))
+     (#\> (incf ,x))
+     (#\^ (incf ,y))
+     (#\v (decf ,y))))
 
 (defmacro visit (x y l)
   `(setf (gethash (cons ,x ,y) ,l) t))
