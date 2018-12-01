@@ -1,33 +1,17 @@
-(require-extension srfi-69)
+(require-extension srfi-1)  ; circular-list
+(require-extension srfi-69) ; hash-tables
+(use loop)
 
-(define data (list (read)))
-(define tail data)
+(define data
+  (loop for value = (read)
+        until (eof-object? value)
+        collect value
+        sum value into result
+        finally (printf "~a\n" result)))
 
-(define advance-tail
-  (lambda (tail value)
-    (set-cdr! tail (list value))
-    (cdr tail)))
-
-(do ((value (read) (read)))
-    ((eof-object? value))
-  (set! tail (advance-tail tail value)))
-
-(printf "~a\n" (foldl + 0 data))
-
-(set-cdr! tail data)
-
-(define seen (alist->hash-table '((0 . #t))))
-(define seen?
-  (lambda (freq)
-    (if (hash-table-exists? seen freq)
-        (abort freq)
-        (hash-table-set! seen freq #t))))
-
-(define register
-  (lambda (freq value)
-    (seen? (+ freq value))
-    (+ freq value)))
-
-(handle-exceptions exn
-                   (printf "~a\n" exn)
-                   (foldl register 0 data))
+(loop for value in (apply circular-list data)
+      with seen = (alist->hash-table '((0 . #t)))
+      sum value into freq
+      until (hash-table-exists? seen freq)
+      do (hash-table-set! seen freq #t)
+      finally (printf "~a\n" freq))
