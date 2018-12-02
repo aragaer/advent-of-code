@@ -13,15 +13,17 @@
         count (rassoc 3 table) into threes
         finally (print (* twos threes))))
 
-(define seen (make-hash-table))
 (define ((collision table) item)
   (let ((result (hash-table-exists? table item)))
     (hash-table-set! table item #t)
     (and result item)))
 
-(define (subwords word)
-  (loop for c in (string->list word)
-        for x from 0
-        collect (string-replace word " " x (+ 1 x))))
+(define ((replace-at string substring) index)
+  (string-replace string substring index
+                  (+ (string-length substring) index)))
 
-(print (string-delete #\space (find (collision seen) (append-map subwords *all-words*))))
+(define (subwords word)
+  (map (replace-at word " ") (range (string-length word))))
+
+(let ((seen (make-hash-table)))
+  (print (string-delete #\space (find (collision seen) (append-map subwords *all-words*)))))
