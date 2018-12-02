@@ -1,34 +1,29 @@
 (load "common.scm")
 
-(define-inline (count c t)
+(define (count-into c t)
   (hash-table-update!/default t c add1 0) t)
 
 (define *all-words*
   (loop for line = (read-line)
         until (eof-object? line)
         for word = (string->list line)
-        for table = (hash-table->alist (fold count (make-hash-table) word))
+        for table = (hash-table->alist (fold count-into (make-hash-table) word))
         collect word
         count (rassoc 2 table) into twos
         count (rassoc 3 table) into threes
         finally (print (* twos threes))))
 
-(define-inline (levenstein w1 w2)
-  (loop for c1 in w1
-        for c2 in w2
-        when (equal? c1 c2) collect c1 into same
-        else count #t
-        finally (set! *last-common* (or same '()))))
+(define (levenstein w1 w2)
+  (let ((same (map eq? w1 w2)))
+    (define (pass a b) (and a b))
+    (values (count not same) (filter-map pass same w1))))
 
-(loop for word in *all-words*
-      for position from 1
-      for res = (loop for word2 in (drop *all-words* position)
-                      for lev = (levenstein word word2)
-                      until (= 1 lev)
-                      finally (return (cons word2 lev)))
-      while res
-      for word2 = (car res)
-      for lev = (cdr res)
-      until (= 1 lev)
-      finally (format #t "~{~c~} ~{~c~} ~a ~{~c~}~%"
-                      word word2 lev *last-common*))
+(define ((close-to w1) w2)
+  (let-values (((distance similar) (levenstein w1 w2)))
+    (and (= 1 distance) (print (list->string similar)))))
+
+(loop for it = *all-words* then other-words
+      for word = (first it)
+      for other-words = (list-tail it 1)
+      until (any (close-to word) other-words)
+      until (null? other-words))
