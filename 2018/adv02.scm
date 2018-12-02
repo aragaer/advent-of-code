@@ -8,22 +8,20 @@
         until (eof-object? line)
         for word = (string->list line)
         for table = (hash-table->alist (fold count-into (make-hash-table) word))
-        collect word
+        collect line
         count (rassoc 2 table) into twos
         count (rassoc 3 table) into threes
         finally (print (* twos threes))))
 
-(define (levenstein w1 w2)
-  (let ((same (map eq? w1 w2)))
-    (define (pass a b) (and a b))
-    (values (count not same) (filter-map pass same w1))))
+(define seen (make-hash-table))
+(define ((collision table) item)
+  (let ((result (hash-table-exists? table item)))
+    (hash-table-set! table item #t)
+    (and result item)))
 
-(define ((close-to w1) w2)
-  (let-values (((distance similar) (levenstein w1 w2)))
-    (and (= 1 distance) (print (list->string similar)))))
+(define (subwords word)
+  (loop for c in (string->list word)
+        for x from 0
+        collect (string-replace word " " x (+ 1 x))))
 
-(loop for it = *all-words* then other-words
-      for word = (first it)
-      for other-words = (list-tail it 1)
-      until (any (close-to word) other-words)
-      until (null? other-words))
+(print (string-delete #\space (find (collision seen) (append-map subwords *all-words*))))
