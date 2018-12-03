@@ -1,8 +1,5 @@
 (load "common.scm")
 
-(define (count-into c t)
-  (hash-table-update!/default t c add1 0) t)
-
 (define *all-words*
   (loop for line = (read-line)
         until (eof-object? line)
