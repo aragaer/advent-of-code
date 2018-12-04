@@ -18,10 +18,18 @@
               '(())
               lists))
 
+(define-syntax inc!
+  (syntax-rules ()
+    ((inc! var)
+     (set! var (+ var 1)))))
+
 (define (count-into c t)
   (hash-table-update!/default t c add1 0) t)
 
-(define (sum-into c t value)
+(define ((vector-inc-at! vector) index)
+ (inc! (vector-ref vector index)))
+
+(define ((hash-table-add-to! t) c value)
   (hash-table-update!/default t c (lambda (old) (+ old value)) 0) t)
 
 (define (vector-max vector)

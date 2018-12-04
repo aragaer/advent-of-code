@@ -2,46 +2,38 @@
 
 (define lines (sort (read-lines) string<))
 
-(define begin-regex "\\[.*\\] Guard #(\\d+) begins shift")
-(define sleep-regex "\\[.*?:(\\d\\d)\\] falls asleep")
-(define wake-regex "\\[.*?:(\\d\\d)\\] wakes up")
+(define begin-regex "Guard #(\\d+) begins shift")
+(define sleep-regex "\\[.*?:(\\d\\d)\\] [wf]")
 
-(define asleep-times (make-hash-table))
-(define asleep-minutes-count (make-hash-table))
+(define sleep-data (make-hash-table))
 
-(do ((it lines (cdr it)) (current-guard '()))
-    ((null? it))
-  (let* ((line (car it))
-         (shift (string-match begin-regex line))
-         (sleep (string-match sleep-regex line)))
-    (cond (shift
-           (set! current-guard (string->number (second shift)))
-           (if (not (hash-table-exists? asleep-minutes-count current-guard))
-               (hash-table-set! asleep-minutes-count current-guard (make-vector 60 0))))
-          (sleep
-           (let ((sleep-at (string->number (second sleep)))
-                 (wake-at (string->number (second (string-match wake-regex (cadr it)))))
-                 (minutes (hash-table-ref asleep-minutes-count current-guard)))
-             (set! it (cdr it))
-             (for-each (lambda (m)
-                         (vector-set! minutes m (+ 1 (vector-ref minutes m))))
-                       (range sleep-at wake-at))
-             (sum-into current-guard asleep-times (- wake-at sleep-at))))
-          (else
-           (abort line)))))
+(define ((extract-num regex) line)
+  (let ((match (string-search regex line)))
+    (and match (string->number (second match)))))
 
-(let* ((most-sleepy (hash-table-fold asleep-times
+(loop for it = lines then (if begin-shift (cdr it) (cddr it))
+      until (null? it)
+      for begin-shift = ((extract-num begin-regex) (first it))
+      for current-guard = begin-shift then (or begin-shift current-guard)
+      for sleep-range = (map (extract-num sleep-regex) (take it 2))
+      unless begin-shift
+      do (hash-table-update!/default sleep-data current-guard
+                                     (lambda (v) (for-each (vector-inc-at! v) (apply range sleep-range)) v)
+                                     (make-vector 60 0)))
+
+(let* ((most-sleepy (hash-table-fold sleep-data
                                      (lambda (k v state)
-                                       (if (> v (cdr state))
-                                           (cons k v)
-                                           state))
-                                     (cons 0 0)))
-       (the-minute (vector-max (hash-table-ref asleep-minutes-count (car most-sleepy)))))
-  (printf "Guard ~a is most sleepy - ~a minutes total\n" (car most-sleepy) (cdr most-sleepy))
+                                       (let ((sleep-time (reduce + 0 (vector->list v))))
+                                         (if (> sleep-time (second state))
+                                             (list k sleep-time)
+                                             state)))
+                                     '(0 0)))
+       (the-minute (vector-max (hash-table-ref sleep-data (car most-sleepy)))))
+  (printf "Guard ~a is most sleepy - ~a minutes total\n" (first most-sleepy) (second most-sleepy))
   (printf "Slept most at minute ~a - ~a times\n" (car the-minute) (cdr the-minute))
   (printf "Result: ~a\n" (* (car most-sleepy) (car the-minute))))
 
-(let ((res2 (hash-table-fold asleep-minutes-count
+(let ((res2 (hash-table-fold sleep-data
                              (lambda (k v state)
                                (let ((the-minute (vector-max v)))
                                  (if (> (cdr the-minute) (second state))
