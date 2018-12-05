@@ -38,6 +38,3 @@
      (if (> l (cdr state))
          (cons i l)
          state)) (cons 0 0) vector))
-
-(define ((add-to-set table) c)
-  (hash-table-set! table c #f))
