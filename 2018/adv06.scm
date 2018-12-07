@@ -18,10 +18,7 @@
 
 (define unlimited 1000000)
 
-(define ((distance x1 y1) x2 y2)
-  (+ (abs (- x1 x2)) (abs (- y1 y2))))
-
-(define (distance2 pt1 pt2)
+(define (distance pt1 pt2)
   (reduce + 0 (map (compose abs -) pt1 pt2)))
 
 (define perfect-range 10000)
@@ -30,7 +27,7 @@
 (define perfect 0)
 
 (loop for pt in (cartesian-product (range left (+ 1 right)) (range top (+ 1 bottom)))
-      for distances = (sort (map (lambda (pt2) (cons (distance2 pt pt2) pt2)) points)
+      for distances = (sort (map (lambda (pt2) (cons (distance pt pt2) pt2)) points)
                             (lambda (d1 d2) (< (first d1) (first d2))))
       for closest = (cdr (first distances))
       if (< (first (first distances)) (first (second distances)))
