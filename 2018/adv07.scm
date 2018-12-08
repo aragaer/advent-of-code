@@ -19,39 +19,34 @@
 
 (set! *all-steps* (sort (delete-duplicates *all-steps*) string<))
 
-(loop with steps-to-do = *all-steps*
-      with steps-done = '()
+(define ((can-do-step steps-done) step)
+  (lset<= string=
+          (hash-table-ref/default ordering step '())
+          steps-done))
+
+(loop for steps-to-do = *all-steps* then (remove (lambda (s) (string= s step)) steps-to-do)
+      for steps-done = '() then (cons step steps-done)
       while (pair? steps-to-do)
-      for step = (find (lambda (step)
-                         (lset<= string=
-                                 (hash-table-ref/default ordering step '())
-                                 steps-done))
-                       steps-to-do)
+      for step = (find (can-do-step steps-done) steps-to-do)
       do (display step)
-      do (set! steps-to-do (remove (lambda (s) (string= s step)) steps-to-do))
-      do (set! steps-done (cons step steps-done))
       finally (newline))
 
 (define elves 5)
 (define (step-time step)
   (+ 61 (list-index (lambda (s) (string= step s)) *all-steps*)))
 
+(define ((step-is-done-by second) i)
+  (and (= (car i) second) (cdr i)))
+
 (print
  (loop for second from 0
-       for steps-done = '() then (append steps-done
-                                         (filter-map (lambda (i)
-                                                       (and (= (car i) second) (cdr i))) queues))
-       for queues = '() then (remove (lambda (i) (= (car i) second)) queues)
        with steps-to-do = *all-steps*
+       for steps-done = '() then (append steps-done (filter-map (step-is-done-by second) queues))
+       for queues = '() then (remove (step-is-done-by second) queues)
        while (< (length steps-done) (length *all-steps*))
-       for steps-available = (filter (lambda (step)
-                                       (lset<= string=
-                                               (hash-table-ref/default ordering step '())
-                                               steps-done))
-                                     steps-to-do)
        ;do (printf "~a ~a ~a\n" second queues steps-done)
        do (loop while (< (length queues) elves)
-                for step in steps-available
+                for step in (filter (can-do-step steps-done) steps-to-do)
                 ;do (printf "Elf ~a starts step ~a at time ~a\n" (length queues) step second)
                 do (set! queues (cons (cons (+ second (step-time step)) step) queues))
                 do (set! steps-to-do (remove (lambda (s) (string= s step)) steps-to-do)))
