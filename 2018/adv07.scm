@@ -23,14 +23,12 @@
 
 (define elves 5)
 (define base-time 60)
-(define step-times (butlast (fold (lambda (step times)
-                                    (alist-cons step (+ 1 (cdar times)) times))
-                                  `((#\space . ,base-time)) *all-steps*)))
-(define (step-time step)
-  (assoc-value/default step step-times))
 
 (let ((steps-to-do *all-steps*) (steps-done '()) (queues '()))
   (define ((step-is-done-by? second) i) (= (car i) second))
+  (define step-times (fold (lambda (step times)
+                             (alist-cons step (+ 1 (cdar times)) times))
+                           `((#\space . ,base-time)) *all-steps*))
   (loop for second from 0
         do (let-values (((done queued) (partition (step-is-done-by? second) queues)))
              (set! steps-done (append (map cdr done) steps-done))
@@ -38,6 +36,6 @@
         while (< (length steps-done) (length *all-steps*))
         do (loop while (< (length queues) elves)
                  for step in (filter (can-do-step? steps-done) steps-to-do)
-                 do (push! (cons (+ second (step-time step)) step) queues)
+                 do (push! (xcons step (+ second (assoc-value/default step step-times))) queues)
                  do (set! steps-to-do (delete step steps-to-do)))
         finally (print second)))
