@@ -8,20 +8,21 @@
   marble)
 
 (define (game-turn current new-value)
+  "Returns score and new current marble"
   (if (= 0 (modulo new-value 23))
       (let ((taken (take-7-back current)))
-        (linked-list-remove taken)
+        (linked-list-remove! taken)
         (values (+ new-value (linked-list-value taken)) (linked-list-next taken)))
       (let ((new-marble (make-linked-list-item new-value)))
-        (linked-list-insert-after (linked-list-next current) new-marble)
+        (linked-list-insert-after! (linked-list-next current) new-marble)
         (values 0 new-marble))))
 
 (define (game players last-marble)
-  (loop for current-marble from 1 to last-marble
+  (loop for current-marble from 1 to (* last-marble 100)
         for current-player = 0 then (modulo (+ 1 current-player) players)
         with scores = (make-vector players 0)
         with current = (make-linked-list-item 0)
-        initially (linked-list-link current current)
+        initially (linked-list-link! current current)
         do (let-values (((score new-current) (game-turn current current-marble)))
              (inc! (vector-ref scores current-player) score)
              (set! current new-current))
