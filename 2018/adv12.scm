@@ -5,21 +5,20 @@
 (define (char->bool char) (eq? char #\#))
 (define (bool->char bool) (if bool #\# #\.))
 
-(define pots
-  (let ((line (drop (string->list (read-line)) 15)))
-    (map char->bool line)))
+(define pots (map char->bool ((o cddr (drop-until #\:) string->list) (read-line))))
 
 (read-line)
 
 (define (window->num state)
-  (reduce + 0 (map (lambda (p v) (if p v 0)) state '(1 2 4 8 16))))
+  (apply + (filter-map fand state '(1 2 4 8 16))))
 
 (for-each
- (lambda (line)
-   (let ((state (take line 5))
-         (result (char->bool (last line))))
-     (vector-set! rules (window->num (map char->bool state)) result)))
- (map string->list (read-lines)))
+ (o
+  (lambda (line)
+    (vector-set! rules (window->num (take line 5)) (last line)))
+  (m char->bool)
+  string->list)
+ (read-lines))
 
 (define (print-pots)
   (format #t "~{~a~}~%" (map bool->char (append '(#f) pots))))
@@ -38,9 +37,8 @@
       do (when (= 0 (modulo generation 100))
            (print generation " " leftmost)
            (print-pots))
-      finally (print (loop for s in pots
-                           for p from leftmost
-                           if s sum p))
-      finally (print (loop for s in pots
-                           for p from (+ 50000000000 (- generation) leftmost)
-                           if s sum p)))
+      finally (loop for s in pots
+                    for p from leftmost
+                    if s sum p into result1
+                    if s sum (+ 50000000000 (- generation) p) into result2
+                    finally (printf "~a\n~a\n" result1 result2)))

@@ -46,6 +46,7 @@
 
 (define string->char (o car string->list))
 (define ((p func) . args) (apply values (map func args)))
+(define ((m func) args) (map func args))
 
 (define (sliding-lists my-list count)
   (unfold (lambda (x) (= count (first x)))
@@ -55,3 +56,8 @@
 
 (define (sliding-map func list window)
   (apply map func (sliding-lists list window)))
+
+(define (fand x1 x2) (and x1 x2))
+
+(define ((drop-until val) list)
+  (drop-while (lambda (item) (not (eq? item val))) list))
