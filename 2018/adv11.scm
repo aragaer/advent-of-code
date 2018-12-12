@@ -11,15 +11,6 @@
               (range 1 301)))
        (range 1 301)))
 
-(define (sliding-lists my-list count)
-  (unfold (lambda (x) (= count (first x)))
-          (lambda (x) (second x))
-          (lambda (x) (list (+ (first x) 1) (cdr (second x))))
-          (list 0 my-list)))
-
-(define (sliding-map func list window)
-  (apply map func (sliding-lists list window)))
-
 (define (max-power new old)
   (if (> (first new)
          (first old))

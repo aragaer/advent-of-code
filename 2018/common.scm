@@ -46,3 +46,12 @@
 
 (define string->char (o car string->list))
 (define ((p func) . args) (apply values (map func args)))
+
+(define (sliding-lists my-list count)
+  (unfold (lambda (x) (= count (first x)))
+          (lambda (x) (second x))
+          (lambda (x) (list (+ (first x) 1) (cdr (second x))))
+          (list 0 my-list)))
+
+(define (sliding-map func list window)
+  (apply map func (sliding-lists list window)))
