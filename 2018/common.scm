@@ -9,6 +9,7 @@
 (use vector-lib)
 (use miscmacros)
 (use lazy-lists)
+(use numbers)
 
 (define (cartesian-product . lists)
   (fold-right (lambda (xs ys)
@@ -43,6 +44,7 @@
 
 (define (assoc/default key alist . default) (or (assoc key alist) (cons key (and default '()))))
 (define (assoc-value/default . args) (cdr (apply assoc/default args)))
+(define (assoc-value . args) (cdr (apply assoc args)))
 
 (define string->char (o car string->list))
 (define ((p func) . args) (apply values (map func args)))
