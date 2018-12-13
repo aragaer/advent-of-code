@@ -1,32 +1,28 @@
 (load "common.scm")
 (define *debug* #f)
 
-(define (turn-up-right direction)
-  (+ (imag-part direction) (* +i (real-part direction))))
-
-(define (turn-up-left direction)
-  (- (turn-up-right direction)))
-
 (define (turn-left direction) (* +i direction))
 (define (turn-right direction) (* -i direction))
 (define turn-straight identity)
 
 (define position-of first)
 (define direction-of second)
+(define turn-order-of third)
 
-(define (char->direction char)
-  (if* (assoc char '((#\v . -i) (#\^ . +i) (#\< . -1) (#\> . +1)))
-       (cdr it)
-       #f))
+(define (turn-up-right direction)
+  (+ (imag-part direction) (* +i (real-part direction))))
+
+(define (turn-up-left direction)
+  (- (turn-up-right direction)))
 
 (define (turn-func char)
   (case char
-    ((#\\) (lambda (cart) (set! (direction-of cart) (turn-up-left (direction-of cart)))))
-    ((#\/) (lambda (cart) (set! (direction-of cart) (turn-up-right (direction-of cart)))))
-    ((#\+) (lambda (cart) (let ((next-turn (third cart)))
-                            (set-cdr! cart (list ((car next-turn) (direction-of cart))
-                                                 (cdr next-turn))))))
-    (else identity)))
+    ((#\\) (lambda (cart) (modify! (direction-of cart) turn-up-left)))
+    ((#\/) (lambda (cart) (modify! (direction-of cart) turn-up-right)))
+    ((#\+) (lambda (cart)
+             (modify! (direction-of cart) (first (turn-order-of cart)))
+             (modify! (turn-order-of cart) cdr)))
+    (else any?)))
 
 (define (make-cart position direction)
   (list position direction (circular-list turn-left turn-straight turn-right)))
@@ -42,14 +38,15 @@
 (define tracks
   (alist->hash-table
    (loop for y = 0 then (+ y -i)
+         with directions = '((#\v . -i) (#\^ . +i) (#\< . -1) (#\> . +1))
          for line = (read-line)
          until (eof-object? line)
          append (map (lambda (x char)
                        (let ((position (+ x y)))
-                         (if* (char->direction char)
-                              (push! (make-cart position it) carts))
+                         (if* (assoc char directions)
+                              (push! (make-cart position (cdr it)) carts))
                          (cons position (turn-func char))))
-                      (range 0 (string-length line)) (string->list line)))))
+                     (range 0 (string-length line)) (string->list line)))))
 
 (define (track-func-at position)
   (hash-table-ref tracks position))
@@ -84,9 +81,9 @@
         (< x1 x2))))
 
 (loop do (for-each move (sort carts
-                              (lambda (cart1 cart2)
-                                (complex-cmp (position-of cart1) (position-of cart2)))))
+                              (lambda carts
+                                (apply complex-cmp (map position-of carts)))))
       while (< 1 (length carts))
       finally (if (pair? carts)
-                  (printf "Last cart at ~a\n" (pos->string (caar carts)))
+                  (printf "Last cart at ~a\n" (pos->string (position-of (first carts))))
                   (print "No carts left")))
