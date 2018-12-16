@@ -33,10 +33,8 @@
 (opcode eqri i= 'r 'i)
 (opcode eqrr i= 'r 'r)
 
-(define *opcodes* (make-vector 16))
+(define *opcodes* (make-vector 16 '()))
 (define *prog* '())
-
-(define *candidates* (make-vector 16 '()))
 
 (loop for it = *all-lines* then (if (null? it) it (cdr it))
       until (null? it)
@@ -49,17 +47,17 @@
       for matching = (filter (lambda (ins)
                                (list= = after (ins before (cdr op)))) *all-opcodes*)
       do (set! it (cdddr it))
-      do (vector-set! *candidates* (car op)
-                      (lset-union eq? (vector-ref *candidates* (car op)) matching))
+      do (vector-set! *opcodes* (car op)
+                      (lset-union eq? (vector-ref *opcodes* (car op)) matching))
       count (<= 3 (length matching)) into result
       finally (print result)
       finally (set! *prog* (cddr it)))
 
-(loop for alone = (vector-index (lambda (l) (= 1 (length l))) *candidates*)
+(loop for alone = (vector-index (lambda (l) (and (pair? l) (= 1 (length l)))) *opcodes*)
       while alone
-      for alone-op = (first (vector-ref *candidates* alone))
+      for alone-op = (first (vector-ref *opcodes* alone))
       do (vector-set! *opcodes* alone alone-op)
-      do (vector-map! (lambda (i l) (delete! alone-op l eq?)) *candidates*))
+      do (vector-map! (lambda (i l) (if (pair? l) (delete! alone-op l eq?) l)) *opcodes*))
 
 (loop for ins-line in *prog*
       with regs = '(0 0 0 0)
