@@ -63,3 +63,8 @@
 
 (define ((drop-until val) list)
   (drop-while (lambda (item) (not (eq? item val))) list))
+
+(define (nth list index) (first (drop list index)))
+
+(define (i> op1 op2) (if (> op1 op2) 1 0))
+(define (i= op1 op2) (if (= op1 op2) 1 0))
