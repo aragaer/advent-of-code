@@ -1,5 +1,8 @@
 (load "common.scm")
 
+(define *slow-first-part* #f)
+(define *debug* #f)
+
 (define (replace list index new-value)
   (map (lambda (i value)
          (if (= i index) new-value value)) '(0 1 2 3 4 5) list))
@@ -35,7 +38,6 @@
   (let ((ip-reg-line (read-line))
         (ip-reg-regex "#ip (\\d+)"))
     (string->number (second (string-match ip-reg-regex ip-reg-line)))))
-(print *ip-reg*)
 
 (define *prog*
   (list->vector
@@ -45,36 +47,36 @@
          do (read-line)
          collect ((eval op) args))))
 
-(if #f
+(if *slow-first-part*
     (loop with ip = 0
           while (and (<= 0 ip) (> (vector-length *prog*) ip))
           with regs = '(0 0 0 0 0 0)
           do (set! regs (replace regs *ip-reg* ip))
-          do (format #t "ip=~a [~{~a~^, ~}] " ip regs)
+          if *debug* do (format #t "ip=~a [~{~a~^, ~}] " ip regs)
           do (set! regs ((vector-ref *prog* ip) regs))
-          do (format #t "[~{~a~^, ~}]~%" regs)
+          if *debug* do (format #t "[~{~a~^, ~}]~%" regs)
           do (set! ip (+ 1 (nth regs *ip-reg*)))
-          finally (print (first regs))))
+          finally (print (first regs)))
+    (loop with ip = 0
+          until (= 1 ip) ; at this point reg4 contains the value to factor
+          while (and (<= 0 ip) (> (vector-length *prog*) ip))
+          with regs = '(0 0 0 0 0 0)
+          do (set! regs (replace regs *ip-reg* ip))
+          if *debug* do (format #t "ip=~a [~{~a~^, ~}] " ip regs)
+          do (set! regs ((vector-ref *prog* ip) regs))
+          if *debug* do (format #t "[~{~a~^, ~}]~%" regs)
+          do (set! ip (+ 1 (nth regs *ip-reg*)))
+          finally (print (loop for i from 1 to (fifth regs)
+                               if (= 0 (modulo (fifth regs) i)) sum i))))
 
-(loop with ip = 0
-      until (= 1 ip) ; at this point reg4 contains the value to factor
-      while (and (<= 0 ip) (> (vector-length *prog*) ip))
-      with regs = '(0 0 0 0 0 0)
-      do (set! regs (replace regs *ip-reg* ip))
-      do (format #t "ip=~a [~{~a~^, ~}] " ip regs)
-      do (set! regs ((vector-ref *prog* ip) regs))
-      do (format #t "[~{~a~^, ~}]~%" regs)
-      do (set! ip (+ 1 (nth regs *ip-reg*)))
-      finally (print (loop for i from 1 to (fifth regs)
-                           if (= 0 (modulo (fifth regs) i)) sum i)))
 (loop with ip = 0
       until (= 1 ip) ; at this point reg4 contains the value to factor
       while (and (<= 0 ip) (> (vector-length *prog*) ip))
       with regs = '(1 0 0 0 0 0)
       do (set! regs (replace regs *ip-reg* ip))
-      do (format #t "ip=~a [~{~a~^, ~}] " ip regs)
+      if *debug* do (format #t "ip=~a [~{~a~^, ~}] " ip regs)
       do (set! regs ((vector-ref *prog* ip) regs))
-      do (format #t "[~{~a~^, ~}]~%" regs)
+      if *debug* do (format #t "[~{~a~^, ~}]~%" regs)
       do (set! ip (+ 1 (nth regs *ip-reg*)))
       finally (print (loop for i from 1 to (fifth regs)
                            if (= 0 (modulo (fifth regs) i)) sum i)))
