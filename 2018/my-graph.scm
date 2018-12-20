@@ -1,0 +1,27 @@
+(define (complex-cmp n1 n2)
+  (let ((x1 (real-part n1))
+        (x2 (real-part n2))
+        (y1 (imag-part n1))
+        (y2 (imag-part n2)))
+    (if (= y1 y2)
+        (< x1 x2)
+        (< y1 y2))))
+
+(define ((add G) pos)
+  (set! (first G) (lset-adjoin = (first G) pos)))
+
+(define ((connect G) pos1 pos2)
+  (let* ((sorted (sort (list pos1 pos2) complex-cmp))
+         (fst (first sorted))
+         (snd (second sorted)))
+    (if *debug* (print "Adding edge " pos1 " <-> " pos2))
+    (hash-table-set! (second G) (list fst snd) #t)))
+
+(define ((connected? G) pos1 pos2)
+  (let* ((sorted (sort (list pos1 pos2) complex-cmp))
+         (fst (first sorted))
+         (snd (second sorted)))
+    (hash-table-exists? (second G) (list fst snd))))
+
+(define ((neighbours G) pos)
+  (filter (lambda (p) ((connected? G) pos p)) (first G)))
