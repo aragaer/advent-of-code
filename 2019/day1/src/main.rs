@@ -7,18 +7,13 @@ fn fuel_for(mass: i32) -> i32 {
     cmp::max(mass / 3 - 2, 0)
 }
 
-fn arg_or_stdin() -> Box<dyn io::Read> {
-    match env::args().nth(1) {
-        None => Box::new(io::stdin()),
-        Some(filename) => Box::new(fs::File::open(filename)
-                                   .expect("Failed to open file")),
-    }
-}
-
 fn read_input() -> String {
     let mut contents = String::new();
-    arg_or_stdin()
-        .read_to_string(&mut contents)
+    match env::args().nth(1) {
+        None => Box::new(io::stdin()) as Box<dyn io::Read>,
+        Some(filename) => Box::new(fs::File::open(filename)
+                                   .expect("Failed to open file")),
+    }.read_to_string(&mut contents)
         .expect("Failed to read");
 
     contents
