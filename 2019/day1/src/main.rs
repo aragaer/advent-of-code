@@ -1,20 +1,33 @@
 use std::cmp;
 use std::env;
 use std::fs;
+use std::io;
 
 fn fuel_for(mass: i32) -> i32 {
     cmp::max(mass / 3 - 2, 0)
 }
 
+fn arg_or_stdin() -> Box<dyn io::Read> {
+    match env::args().nth(1) {
+        None => Box::new(io::stdin()),
+        Some(filename) => Box::new(fs::File::open(filename)
+                                   .expect("Failed to open file")),
+    }
+}
+
+fn read_input() -> String {
+    let mut contents = String::new();
+    arg_or_stdin()
+        .read_to_string(&mut contents)
+        .expect("Failed to read");
+
+    contents
+}
+
 fn main() {
-    let args: Vec<String> = env::args().collect();
-
-    let contents = fs::read_to_string(&args[1])
-        .expect("Failed to read file");
-
     let mut result = 0;
     let mut result2 = 0;
-    for line in contents.lines() {
+    for line in read_input().lines() {
         let mass: i32 = line.parse()
             .expect("Failed to parse integer");
 
