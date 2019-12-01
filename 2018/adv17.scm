@@ -1,6 +1,6 @@
 (load "common.scm")
 
-(define *debug* #f)
+(define *debug* #t)
 
 (define data-regex "([xy])=(\\d+),\\s+[xy]=(\\d+)\\.\\.(\\d+)")
 
@@ -43,13 +43,10 @@
                 (set! *bottom* b)))
 
 (hash-table-set! *land* 500 'spring)
-(hash-table-set! *land* 500+i 'flow)
+;(hash-table-set! *land* 500+i 'flow)
 
 (define *real-top* *top*)
-(if (< 0 *top*)
-    (set! *top* 0))
-
-(print *left* ":" *top* " - " *right* ":" *bottom*)
+(if (< 0 *top*) (set! *top* 0))
 
 (define (thing-at x y)
   (hash-table-ref/default *land* (make-rectangular x y) 'sand))
@@ -61,39 +58,49 @@
   (hash-table-set! *land* (make-rectangular x y) 'water))
 
 (define (trickle-from x y)
+  (if *debug* (print "Trickle from " x ":" y))
   (loop for py from (+ 1 y) to *bottom*
         for thing = (thing-at x py)
         while (eq? thing 'sand)
         do (flow-to x py)
-        finally (if (not (eq? thing 'sand)) (pool-from x (- py 1)))))
+        finally (if (not (eq? thing 'sand)) (pool-from x (- py 1)) #f)))
 
 (define (pool-from x y)
-  (let ((wall-on-left
-         (loop for px from (- x 1) downto *left*
-               for thing = (thing-at px y)
-               for thing-below = (thing-at px (+ 1 y))
-               for will-pool = (member thing '(sand flow))
-               while will-pool
-               unless (eq? thing-below 'flow) do (flow-to px y)
-               while (member thing-below '(clay water))
-               finally (return (if will-pool #f (+ px 1)))))
-        (wall-on-right
-         (loop for px from (+ x 1) to *right*
-               for thing = (thing-at px y)
-               for thing-below = (thing-at px (+ 1 y))
-               for will-pool = (member thing '(sand flow))
-               while will-pool
-               unless (eq? thing-below 'flow) do (flow-to px y)
-               while (member thing-below '(clay water))
-               finally (return (if will-pool #f (- px 1))))))
-    (if (and wall-on-left wall-on-right)
-        (begin
-          (for-each (lambda (px) (flood-at px y)) (range wall-on-left (+ 1 wall-on-right)))
-          (for-each (lambda (px)
-                      (if (eq? (thing-at px (- y 1)) 'flow)
-                          (pool-from px (- y 1))))
-                    (range wall-on-left (+ 1 wall-on-right))))
-        #f)))
+  (when *debug*
+    (newline)
+    (print "Pool from " x ":" y)
+    (print-state))
+  (if (< y *bottom*)
+      (let ((left-edge
+             (loop for px downfrom (- x 1)
+                   for thing = (thing-at px y)
+                   for thing-below = (thing-at px (+ 1 y))
+                   for will-pool = (member thing '(sand flow))
+                   while will-pool
+                   unless (eq? thing-below 'flow) do (flow-to px y)
+                   while (member thing-below '(clay water))
+                   finally (return px)))
+            (right-edge
+             (loop for px from (+ x 1)
+                   for thing = (thing-at px y)
+                   for thing-below = (thing-at px (+ 1 y))
+                   for will-pool = (member thing '(sand flow))
+                   while will-pool
+                   unless (eq? thing-below 'flow) do (flow-to px y)
+                   while (member thing-below '(clay water))
+                   finally (return px))))
+        (if *debug* (print left-edge " " (thing-at left-edge y) ", " right-edge " " (thing-at right-edge y)))
+        (if (or (eq? (thing-at left-edge y) 'flow)
+                (eq? (thing-at right-edge y) 'flow))
+            (begin
+              (if (eq? (thing-at left-edge y) 'flow)
+                  (trickle-from left-edge y))
+              (if (eq? (thing-at right-edge y) 'flow)
+                  (trickle-from right-edge y)))
+            (let ((left-to-right (range (+ 1 left-edge) right-edge)))
+              (for-each (lambda (px) (flood-at px y)) left-to-right)
+              (pool-from (find (lambda (px) (eq? (thing-at px (- y 1)) 'flow)) left-to-right) (- y 1)))))
+      (if *debug* (print "Flowing out at " x ":" y))))
 
 (define (print-state)
   (for-each
@@ -105,22 +112,9 @@
             " " y))
    (range *top* (+ 1 *bottom*))))
 
-(define (step)
-  (loop for y in (reverse (range *top* *bottom*))
-        sum (loop for x from *left* to *right*
-                    for thing = (thing-at x y)
-                    for thing-below = (thing-at x (+ 1 y))
-                    for should-process = (and (eq? thing 'flow) (eq? thing-below 'sand))
-                    count should-process
-                    if should-process
-                    do (trickle-from x y))))
+(trickle-from 500 0)
 
-(loop for s-n from 1
-      do (print s-n)
-      if *debug* do (begin (print-state) (newline))
-      while (< 0 (step)))
-
-(print-state)
+(if *debug* (print-state))
 
 (print (hash-table-fold
         *land*

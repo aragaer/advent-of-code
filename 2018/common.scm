@@ -3,13 +3,13 @@
 (require-extension srfi-69)  ; hash-table
 (require-extension regex)
 
+(use numbers)
 (use loop)
 (use format)
 (use list-comprehensions)
 (use vector-lib)
 (use miscmacros)
 (use lazy-lists)
-(use numbers)
 
 (define (cartesian-product . lists)
   (fold-right (lambda (xs ys)
@@ -68,3 +68,4 @@
 
 (define (i> op1 op2) (if (> op1 op2) 1 0))
 (define (i= op1 op2) (if (= op1 op2) 1 0))
+(define (i< op1 op2) (if (< op1 op2) 1 0))

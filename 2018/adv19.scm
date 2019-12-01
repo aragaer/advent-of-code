@@ -32,7 +32,6 @@
 (opcode eqir i= 'i 'r)
 (opcode eqri i= 'r 'i)
 (opcode eqrr i= 'r 'r)
-(define (nop args) identity)
 
 (define *ip-reg*
   (let ((ip-reg-line (read-line))
