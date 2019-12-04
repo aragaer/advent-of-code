@@ -45,7 +45,7 @@ fn calculate(orig_program: &Vec<i32>, inp1: i32, inp2: i32) -> i32 {
 
     while step(&mut program, position) {
         position += 4;
-        position %= program.len();
+        position %= orig_program.len();
     }
 
     return program[0];
