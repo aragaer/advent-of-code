@@ -27,18 +27,20 @@ enum OpCode {
     Halt
 }
 
-fn op(opcode: i32) -> OpCode {
-    match opcode {
-        1 => OpCode::Add,
-        2 => OpCode::Mul,
-        3 => OpCode::Input,
-        4 => OpCode::Output,
-        5 => OpCode::JNZ,
-        6 => OpCode::JZ,
-        7 => OpCode::LT,
-        8 => OpCode::EQ,
-        99 => OpCode::Halt,
-        x => panic!("Unknown opcode: {}", x),
+impl From<i32> for OpCode {
+    fn from(instruction: i32) -> Self {
+        match instruction % 100 {
+            1 => OpCode::Add,
+            2 => OpCode::Mul,
+            3 => OpCode::Input,
+            4 => OpCode::Output,
+            5 => OpCode::JNZ,
+            6 => OpCode::JZ,
+            7 => OpCode::LT,
+            8 => OpCode::EQ,
+            99 => OpCode::Halt,
+            x => panic!("Unknown opcode: {}", x),
+        }
     }
 }
 
@@ -56,7 +58,7 @@ impl Instruction {
     fn new(instruction: i32) -> Instruction {
         Instruction {
             code: instruction,
-            opcode: op(instruction % 100),
+            opcode: OpCode::from(instruction),
         }
     }
 
@@ -77,7 +79,7 @@ struct State {
     program: Vec<i32>,
     pc: usize,
     output: Option<i32>,
-    input: i32,
+    input: Vec<i32>,
 }
 
 impl State {
@@ -98,7 +100,6 @@ impl State {
         }
     }
 }
-
 
 fn step(state: &mut State) -> bool {
     let instruction = state.next();
@@ -122,8 +123,9 @@ fn step(state: &mut State) -> bool {
         },
         OpCode::Input => {
             let a1 = state.program[pos+1] as usize;
-            state.program[a1] = state.input;
-            // println!("Store {} at {}", state.input, a1);
+            let v1 = state.input.remove(0);
+            // println!("Store {} at {}", v1, a1);
+            state.program[a1] = v1;
             state.advance(2);
             true
         },
@@ -186,21 +188,26 @@ fn step(state: &mut State) -> bool {
     }
 }
 
-fn run(orig_program: &Vec<i32>, arg: i32) {
+fn run(orig_program: &Vec<i32>, arg: i32) -> Vec<i32> {
+    let mut input: Vec<i32> = Vec::new();
+    input.push(arg);
+    let mut output: Vec<i32> = Vec::new();
+
     let mut state = State {
         program: orig_program.clone(),
         pc: 0,
         output: None,
-        input: arg,
+        input: input,
     };
 
     while step(&mut state) {
         match state.output {
-            Some(x) => println!("Output: {}", x),
+            Some(x) => output.push(x),
             None => {},
         }
         state.output = None;
     }
+    output
 }
 
 fn main() {
@@ -208,8 +215,12 @@ fn main() {
         .map(|o| o.unwrap().trim().parse().unwrap())
         .collect();
 
-    println!("Input 1:");
-    run(&orig_program, 1);
-    println!("Input 5:");
-    run(&orig_program, 5);
+    let mut output1 = run(&orig_program, 1);
+    let result1 = output1.pop().unwrap();
+    println!("Result: {}", result1);
+    if output1.iter().any(|x| *x != 0) {
+        panic!("Expected only 0's, got {:?}", output1);
+    }
+    let result2 = run(&orig_program, 5).pop().unwrap();
+    println!("Result2: {}", result2);
 }
