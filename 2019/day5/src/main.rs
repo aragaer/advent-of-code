@@ -1,3 +1,7 @@
+extern crate num_enum;
+
+use num_enum::TryFromPrimitive;
+use std::convert::TryFrom;
 use std::env;
 use std::fs;
 use std::io;
@@ -15,212 +19,155 @@ fn input() -> impl Iterator<Item=io::Result<String>> {
         .map(|s| Ok(s.unwrap()))
 }
 
+#[derive(TryFromPrimitive, PartialEq, Debug)]
+#[repr(i32)]
 enum OpCode {
-    Add,
-    Mul,
-    Input,
-    Output,
-    JNZ,
-    JZ,
-    LT,
-    EQ,
-    Halt
+    Nop,
+    Add = 1,
+    Mul = 2,
+    Input = 3,
+    Output = 4,
+    JNZ = 5,
+    JZ = 6,
+    LT = 7,
+    EQ = 8,
+    Halt = 99
 }
 
-impl From<i32> for OpCode {
-    fn from(instruction: i32) -> Self {
-        match instruction % 100 {
-            1 => OpCode::Add,
-            2 => OpCode::Mul,
-            3 => OpCode::Input,
-            4 => OpCode::Output,
-            5 => OpCode::JNZ,
-            6 => OpCode::JZ,
-            7 => OpCode::LT,
-            8 => OpCode::EQ,
-            99 => OpCode::Halt,
-            x => panic!("Unknown opcode: {}", x),
-        }
-    }
-}
-
+#[derive(TryFromPrimitive, Debug)]
+#[repr(i32)]
 enum Mode {
     Position,
     Immediate
 }
 
-struct Instruction {
-    code: i32,
-    opcode: OpCode,
-}
-
-impl Instruction {
-    fn new(instruction: i32) -> Instruction {
-        Instruction {
-            code: instruction,
-            opcode: OpCode::from(instruction),
-        }
-    }
-
-    fn mode(self: &Self, n: usize) -> Mode {
-        let mut code = self.code / 100;
-        for _ in 0..n {
-            code /= 10
-        }
-        match code % 10 {
-            0 => Mode::Position,
-            1 => Mode::Immediate,
-            x => panic!("Unknown mode {}", x),
-        }
-    }
-}
-
-struct State {
+struct Intcode {
     program: Vec<i32>,
     pc: usize,
-    output: Option<i32>,
+    output: Vec<i32>,
     input: Vec<i32>,
+    opcode: OpCode,
+    current_code: i32,
 }
 
-impl State {
-    fn next(self: &Self) -> Instruction {
+impl Iterator for Intcode {
+    type Item = i32;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let result = self.program[self.pc];
+        self.current_code /= 10;
+        self.pc += 1;
+        Some(result)
+    }
+}
+
+impl Intcode {
+    fn new(program: &Vec<i32>, input: Vec<i32>) -> Intcode {
+        Intcode {
+            program: program.clone(),
+            pc: 0,
+            output: Vec::new(),
+            input: input,
+            opcode: OpCode::Nop,
+            current_code: 0
+        }
+    }
+
+    fn _next_opcode(self: &mut Self) -> &OpCode {
         // println!("Code {} at pc {}", self.program[self.pc], self.pc);
-        Instruction::new(self.program[self.pc])
+        self.current_code = self.next().unwrap();
+        self.opcode = OpCode::try_from(self.current_code % 100).unwrap();
+        self.current_code /= 10;
+        &self.opcode
     }
 
-    fn advance(self: &mut Self, count: usize) {
-        self.pc += count;
+    fn _load(&mut self) -> i32 {
+        let value = self.next().unwrap();
+        let result = match Mode::try_from(self.current_code % 10).unwrap() {
+            Mode::Position => self.program[value as usize],
+            Mode::Immediate => value,
+        };
+        result
     }
 
-    fn value_at(self: &Self, pos: usize, mode: Mode) -> i32 {
-        let len = self.program.len();
-        match mode {
-            Mode::Position => self.program[self.program[pos] as usize % len],
-            Mode::Immediate => self.program[pos],
+    fn _store(&mut self, value: i32) {
+        let a = self.next().unwrap() as usize;
+        self.program[a] = value;
+    }
+
+    fn step(&mut self) {
+        match self._next_opcode() {
+            OpCode::Nop => {
+            },
+            OpCode::Add => {
+                let v1 = self._load();
+                let v2 = self._load();
+                self._store(v1+v2);
+            },
+            OpCode::Mul => {
+                let v1 = self._load();
+                let v2 = self._load();
+                self._store(v1*v2);
+            },
+            OpCode::Input => {
+                let v1 = self.input.remove(0);
+                self._store(v1);
+            },
+            OpCode::Output => {
+                let v1 = self._load();
+                self.output.push(v1);
+            },
+            OpCode::JNZ => {
+                let v1 = self._load();
+                let v2 = self._load();
+                if v1 != 0 {
+                    // println!("Jump to {}", v2);
+                    self.pc = v2 as usize;
+                }
+            },
+            OpCode::JZ => {
+                let v1 = self._load();
+                let v2 = self._load();
+                if v1 == 0 {
+                    self.pc = v2 as usize;
+                }
+            },
+            OpCode::LT => {
+                let v1 = self._load();
+                let v2 = self._load();
+                self._store((v1 < v2) as i32);
+            }
+            OpCode::EQ => {
+                let v1 = self._load();
+                let v2 = self._load();
+                self._store((v1 == v2) as i32);
+            },
+            OpCode::Halt => {
+                self.pc -= 1;
+            },
         }
     }
-}
 
-fn step(state: &mut State) -> bool {
-    let instruction = state.next();
-    let pos = state.pc;
-    match instruction.opcode {
-        OpCode::Add => {
-            let v1 = state.value_at(pos+1, instruction.mode(0));
-            let v2 = state.value_at(pos+2, instruction.mode(1));
-            let a3 = state.program[pos+3] as usize;
-            state.program[a3] = v1 + v2;
-            state.advance(4);
-            true
-        },
-        OpCode::Mul => {
-            let v1 = state.value_at(pos+1, instruction.mode(0));
-            let v2 = state.value_at(pos+2, instruction.mode(1));
-            let a3 = state.program[pos+3] as usize;
-            state.program[a3] = v1 * v2;
-            state.advance(4);
-            true
-        },
-        OpCode::Input => {
-            let a1 = state.program[pos+1] as usize;
-            let v1 = state.input.remove(0);
-            // println!("Store {} at {}", v1, a1);
-            state.program[a1] = v1;
-            state.advance(2);
-            true
-        },
-        OpCode::Output => {
-            let v1 = state.value_at(pos+1, instruction.mode(0));
-            state.output = Some(v1);
-            state.advance(2);
-            true
-        },
-        OpCode::JNZ => {
-            let v1 = state.value_at(pos+1, instruction.mode(0));
-            let v2 = state.value_at(pos+2, instruction.mode(1));
-            if v1 == 0 {
-                state.advance(3);
-            } else {
-                // println!("Jump to {}", v2);
-                state.pc = v2 as usize;
-            }
-            true
-        },
-        OpCode::JZ => {
-            let v1 = state.value_at(pos+1, instruction.mode(0));
-            let v2 = state.value_at(pos+2, instruction.mode(1));
-            if v1 != 0 {
-                state.advance(3);
-            } else {
-                state.pc = v2 as usize;
-            }
-            true
-        },
-        OpCode::LT => {
-            let v1 = state.value_at(pos+1, instruction.mode(0));
-            let v2 = state.value_at(pos+2, instruction.mode(1));
-            let a3 = state.program[pos+3] as usize;
-            if v1 < v2 {
-                state.program[a3] = 1;
-            } else {
-                state.program[a3] = 0;
-            }
-            state.advance(4);
-            true
-        },
-        OpCode::EQ => {
-            let v1 = state.value_at(pos+1, instruction.mode(0));
-            let v2 = state.value_at(pos+2, instruction.mode(1));
-            let a3 = state.program[pos+3] as usize;
-            // println!("Compare {} and {}", v1, v2);
-            if v1 == v2 {
-                state.program[a3] = 1;
-            } else {
-                state.program[a3] = 0;
-            }
-            state.advance(4);
-            true
-        },
-        OpCode::Halt => {
-            state.advance(1);
-            false
-        },
-    }
-}
-
-fn run(orig_program: &Vec<i32>, arg: i32) -> Vec<i32> {
-    let mut input: Vec<i32> = Vec::new();
-    input.push(arg);
-    let mut output: Vec<i32> = Vec::new();
-
-    let mut state = State {
-        program: orig_program.clone(),
-        pc: 0,
-        output: None,
-        input: input,
-    };
-
-    while step(&mut state) {
-        match state.output {
-            Some(x) => output.push(x),
-            None => {},
+    fn run(program: &Vec<i32>, input: Vec<i32>) -> Vec<i32> {
+        let mut code = Intcode::new(program, input);
+        while code.opcode != OpCode::Halt {
+            code.step();
         }
-        state.output = None;
+        code.output.clone()
     }
-    output
 }
 
 fn main() {
-    let orig_program: Vec<i32> = input()
+    let program: Vec<i32> = input()
         .map(|o| o.unwrap().trim().parse().unwrap())
         .collect();
 
-    let mut output1 = run(&orig_program, 1);
+    let mut output1 = Intcode::run(&program, vec![1]);
     let result1 = output1.pop().unwrap();
     println!("Result: {}", result1);
     if output1.iter().any(|x| *x != 0) {
         panic!("Expected only 0's, got {:?}", output1);
     }
-    let result2 = run(&orig_program, 5).pop().unwrap();
+    let result2 = Intcode::run(&program, vec![5]).pop().unwrap();
     println!("Result2: {}", result2);
 }
