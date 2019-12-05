@@ -8,15 +8,14 @@ use std::io;
 use std::io::BufRead;
 use std::os::unix::io::FromRawFd;
 
-fn input() -> impl Iterator<Item=io::Result<String>> {
-    let reader = io::BufReader::new(match env::args().nth(1) {
+fn input() -> Vec<i32> {
+    io::BufReader::new(match env::args().nth(1) {
         None => unsafe {fs::File::from_raw_fd(0)},
         Some(filename) => fs::File::open(filename).unwrap(),
-    });
-    reader.split(',' as u8)
+    }).split(',' as u8)
         .map(|b| b.unwrap())
         .map(String::from_utf8)
-        .map(|s| Ok(s.unwrap()))
+        .map(|s| s.unwrap().trim().parse().unwrap()).collect()
 }
 
 #[derive(TryFromPrimitive, PartialEq, Debug)]
@@ -158,9 +157,7 @@ impl Intcode {
 }
 
 fn main() {
-    let program: Vec<i32> = input()
-        .map(|o| o.unwrap().trim().parse().unwrap())
-        .collect();
+    let program = input();
 
     let mut output1 = Intcode::run(&program, vec![1]);
     let result1 = output1.pop().unwrap();
