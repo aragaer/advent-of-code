@@ -35,21 +35,6 @@ fn gcd(mut a: i32, mut b: i32) -> i32 {
     a
 }
 
-fn visible(from: &Complex<i32>, to: &Complex<i32>, map: &Vec<Vec<bool>>) -> bool {
-    let diff = to - from;
-    let steps = gcd(diff.re.abs(), diff.im.abs());
-    let step = diff / steps;
-
-    let mut pos = from.clone();
-    for _ in 1..steps {
-        pos += step;
-        if map[pos.im as usize][pos.re as usize] {
-            return false;
-        }
-    }
-    true
-}
-
 fn direction(target: &Complex<i32>) -> f32 {
     // Return -PI for "up" so that it goes first when sorting
     if target.re == 0 && target.im < 0 {
@@ -59,13 +44,19 @@ fn direction(target: &Complex<i32>) -> f32 {
     (-direction*Complex::i()).to_polar().1
 }
 
-fn integer_distance(target: &Complex<i32>) -> i32 {
+fn square_mod(target: Complex<i32>) -> i32 {
     target.re * target.re + target.im * target.im
 }
 
 #[derive(Eq, PartialEq)]
 struct Dir {
     inner: Complex<i32>,
+}
+
+impl From<Complex<i32>> for Dir {
+    fn from(complex: Complex<i32>) -> Self {
+        Dir{inner: complex / gcd(complex.re.abs(), complex.im.abs())}
+    }
 }
 
 impl Ord for Dir {
@@ -82,8 +73,20 @@ impl PartialOrd for Dir {
     }
 }
 
-fn integer_direction(point: &Complex<i32>) -> Dir {
-    Dir{inner: point / gcd(point.re.abs(), point.im.abs())}
+fn directions_around(point: &Complex<i32>, asteroids: &Vec<Complex<i32>>) -> BTreeMap<Dir, Vec<Complex<i32>>> {
+    let mut result = BTreeMap::new();
+    for asteroid in asteroids.into_iter() {
+        if asteroid != point {
+            result.entry(Dir::from(asteroid-point))
+                .or_insert(Vec::new())
+                .push(*asteroid);
+        }
+    }
+    result.values_mut()
+        .for_each(|v|
+                  v.sort_unstable_by_key(|a|
+                                         square_mod(a-point)));
+    result
 }
 
 fn main() -> Result<()> {
@@ -93,58 +96,34 @@ fn main() -> Result<()> {
     opts.optopt("p", "position", "", "");
     let matches = opts.parse(&args[1..])?;
 
-    let field: Vec<Vec<bool>> = input(&matches.free).collect();
-    let mut asteroids: Vec<Complex<i32>> = Vec::new();
-    for (i, l) in field.iter().enumerate() {
-        for (j, p) in l.iter().enumerate() {
-            if *p {
-                asteroids.push(Complex::new(j as i32, i as i32));
-            }
-        }
-    }
+    let field: Vec<_> = input(&matches.free).collect();
+    let asteroids: Vec<_> = field.iter().enumerate()
+        .flat_map(|(li, l)| l.iter()
+                  .enumerate()
+                  .filter(|p| *p.1)
+                  .map(move |s| (li, s.0)))
+        .map(|(i, j)| Complex::new(j as i32, i as i32))
+        .collect();
 
-    let station;
-
-    if matches.opt_present("p") {
+    let mut a_d = if matches.opt_present("p") {
         let (x, y) = matches.opt_str("p")
             .expect("position")
             .split(':')
             .map(|s| s.parse::<i32>().unwrap())
             .collect_tuple()
             .expect("tuple");
-        station = Complex::new(x, y);
-        if asteroids.contains(&station) {
-            asteroids = asteroids.into_iter()
-                .filter(|x| *x != station)
-                .collect();
-        }
+        directions_around(&Complex::new(x, y), &asteroids)
     } else {
-        let result = asteroids.iter()
-            .map(|a| asteroids.iter()
-                 .filter(|b| *b != a && visible(&a, b, &field))
-                 .count())
-            .enumerate()
-            .max_by_key(|(_,c)| c.clone())
-            .expect("no asteroids?");
-        println!("Result: {}", result.1);
-        station = asteroids[result.0];
-        asteroids.remove(result.0);
-    }
+        asteroids.iter()
+            .map(|a| directions_around(&a, &asteroids))
+            .max_by_key(|m| m.len())
+            .expect("no asteroids?")
+    };
+
+    println!("Result: {}", a_d.len());
 
     let mut count = cmp::min(200, asteroids.len());
-    let mut a_d: BTreeMap<_, Vec<_>> = BTreeMap::new();
-
-    for asteroid in asteroids.into_iter() {
-        let dir = integer_direction(&(asteroid-station));
-        a_d.entry(dir).or_insert(Vec::new()).push(asteroid);
-    }
-
-    for v in a_d.values_mut() {
-        v.sort_unstable_by_key(|a| integer_distance(&(a-station)));
-    }
-
-    let result2;
-    'outer: loop {
+    while count > 0 {
         for targets in a_d.values_mut() {
             if targets.is_empty() {
                 continue;
@@ -153,11 +132,11 @@ fn main() -> Result<()> {
             // println!("shot {}", shot);
             count -= 1;
             if count == 0 {
-                result2 = shot.re * 100 + shot.im;
-                break 'outer;
+                let result2 = shot.re * 100 + shot.im;
+                println!("Result2: {}", result2);
+                break;
             }
         }
     }
-    println!("Result2: {}", result2);
     Ok(())
 }
