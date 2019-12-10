@@ -24,25 +24,20 @@ fn input(args: &Vec<String>) -> impl Iterator<Item=Vec<bool>> {
 }
 
 #[derive(Eq, PartialEq)]
-struct Dir {
-    inner: Complex<i32>,
-}
+struct Dir(Complex<i32>);
 
 impl Dir {
+    fn new(complex: Complex<i32>) -> Dir {
+        Dir{0: complex / gcd(complex.re, complex.im)}
+    }
+
     fn dir(&self) -> f32 {
         // Return -PI for -i so that it goes first when sorting
-        let (re, im) = (self.inner.re, self.inner.im);
-        if re == 0 && im < 0 {
+        if self.0 == -Complex::i() {
             return -std::f32::consts::PI;
         }
         // Rotate by -PI/2
-        Complex::new(im as f32, -re as f32).arg()
-    }
-}
-
-impl From<Complex<i32>> for Dir {
-    fn from(complex: Complex<i32>) -> Self {
-        Dir{inner: complex / gcd(complex.re, complex.im)}
+        Complex::new(self.0.im as f32, -self.0.re as f32).arg()
     }
 }
 
@@ -58,19 +53,20 @@ impl PartialOrd for Dir {
     }
 }
 
-fn directions_around(point: &Complex<i32>, asteroids: &Vec<Complex<i32>>) -> BTreeMap<Dir, Vec<Complex<i32>>> {
+fn directions_around(point: &Complex<i32>, asteroids: &Vec<Complex<i32>>) -> Vec<Vec<Complex<i32>>> {
     let mut result = BTreeMap::new();
     for asteroid in asteroids.iter()
         .filter(|a| *a != point) {
-            result.entry(Dir::from(asteroid-point))
+            result.entry(Dir::new(asteroid-point))
                 .or_insert(Vec::new())
                 .push(*asteroid);
         }
-    result.values_mut()
-        .for_each(|v|
-                  v.sort_unstable_by_key(|a|
-                                         (a-point).norm_sqr()));
-    result
+    result.into_iter()
+        .map(|(_, mut v)| {
+            v.sort_unstable_by_key(|a| (a-point).norm_sqr());
+            v
+        })
+        .collect()
 }
 
 fn main() {
@@ -89,7 +85,7 @@ fn main() {
         .map(|(i, j)| Complex::new(j as i32, i as i32))
         .collect();
 
-    let mut a_d = if matches.opt_present("p") {
+    let mut a_d: Vec<_> = if matches.opt_present("p") {
         let (x, y) = matches.opt_str("p")
             .expect("position")
             .split(':')
@@ -107,7 +103,7 @@ fn main() {
 
     let mut count = min(200, asteroids.len());
     let result2 = loop {
-        let (i, shot) = a_d.values_mut()
+        let (i, shot) = a_d.iter_mut()
             .map(|t| t.remove(0))
             .take(count)
             .enumerate()
