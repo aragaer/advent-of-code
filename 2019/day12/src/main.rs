@@ -1,7 +1,6 @@
 use getopts::Options;
 use itertools::Itertools;
 use num::integer::lcm;
-use std::collections::HashSet;
 
 type P1d = i32;
 
@@ -96,12 +95,9 @@ fn state2key(moons: &Vec<Moon1>) -> (i32, i32, i32, i32, i32, i32, i32, i32) {
 }
 
 fn find_loop1(mut moons: Vec<Moon1>) -> u64 {
-    let mut seen = HashSet::new();
+    let initial = state2key(&moons);
     let mut step = 0;
     loop {
-        if let Some(_) = seen.replace(state2key(&moons)) {
-            return step;
-        };
         step += 1;
         for idxs in (0..4).combinations(2) {
             let (lefts, rights) = moons.split_at_mut(idxs[1]);
@@ -110,18 +106,17 @@ fn find_loop1(mut moons: Vec<Moon1>) -> u64 {
         for moon in moons.iter_mut() {
             moon.r#move();
         }
+        if state2key(&moons) == initial {
+            return step;
+        }
     };
 }
 
 fn find_loop(moons: &mut [Moon]) -> u64 {
     let x = find_loop1(moons.iter().map(|m| m.x).collect());
-    dbg!(x);
     let y = find_loop1(moons.iter().map(|m| m.y).collect());
-    dbg!(y);
     let z = find_loop1(moons.iter().map(|m| m.z).collect());
-    dbg!(z);
-    let loop_len = lcm(x, lcm(y, z));
-    loop_len
+    lcm(x, lcm(y, z))
 }
 
 fn main() {
