@@ -1,5 +1,9 @@
+#[macro_use]
+extern crate num_derive;
+
 use anyhow::Result;
 use getopts::Options;
+use num_traits::cast::{FromPrimitive, ToPrimitive};
 use std::cmp::{max, min};
 use std::collections::{HashMap, HashSet};
 use std::env;
@@ -8,7 +12,32 @@ mod intcode;
 
 use crate::intcode::{Intcode, Program};
 
+#[derive(FromPrimitive, ToPrimitive, Clone, Copy)]
+enum Direction {
+    North = 1,
+    South = 2,
+    West = 3,
+    East = 4,
+}
+
+fn position_at(position: (i32, i32), direction: Direction) -> (i32, i32) {
+    match direction {
+        Direction::North => (position.0, position.1 - 1),
+        Direction::South => (position.0, position.1 + 1),
+        Direction::West => (position.0 + 1, position.1),
+        Direction::East => (position.0 - 1, position.1),
+    }
+}
+
+fn neighbours(pos: (i32, i32)) -> [(i32, i32); 4] {
+    [position_at(pos, Direction::North),
+     position_at(pos, Direction::South),
+     position_at(pos, Direction::East),
+     position_at(pos, Direction::West)]
+}
+
 struct Maze {
+    code: Intcode,
     left: i32,
     right: i32,
     top: i32,
@@ -16,12 +45,13 @@ struct Maze {
     droid: (i32, i32),
     map: HashMap<(i32, i32), char>,
     depth: char,
-    oxygen: Option<(i32, i32)>
+    oxygen: Option<(i32, i32)>,
 }
 
 impl Maze {
-    fn new() -> Maze {
+    fn new(code: Intcode) -> Maze {
         let mut result = Maze {
+            code: code,
             left: -3,
             right: 3,
             top: -3,
@@ -46,190 +76,156 @@ impl Maze {
             println!("{}", s);
         }
     }
-}
 
-
-fn go(code: &mut Intcode, maze: &mut Maze, movement: i64) {
-    let new_position = match movement {
-        1 => (maze.droid.0, maze.droid.1 - 1),
-        2 => (maze.droid.0, maze.droid.1 + 1),
-        3 => (maze.droid.0 + 1, maze.droid.1),
-        4 => (maze.droid.0 - 1, maze.droid.1),
-        x => panic!("Incorrect movement direction {}", x),
-    };
-    maze.bottom = max(maze.bottom, new_position.1+1);
-    maze.top = min(maze.top, new_position.1);
-    maze.left = min(maze.left, new_position.0);
-    maze.right = max(maze.right, new_position.0+1);
-    code.input.clear();
-    code.input.push(movement);
-    match code.next().unwrap() {
-        0 => {
-            maze.map.insert(new_position, '#');
-        },
-        1 => {
-            maze.map.insert(new_position, '.');
-            maze.droid = new_position;
-        },
-        2 => {
-            maze.map.insert(new_position, '.');
-            maze.droid = new_position;
-            maze.oxygen = Some(maze.droid);
-        },
-        x => {
-            panic!("Got {}", x);
-        }
-    }
-}
-
-fn go_and_return(code: &mut Intcode, maze: &mut Maze, movement: i64) -> char {
-    let new_position = match movement {
-        1 => (maze.droid.0, maze.droid.1 - 1),
-        2 => (maze.droid.0, maze.droid.1 + 1),
-        3 => (maze.droid.0 + 1, maze.droid.1),
-        4 => (maze.droid.0 - 1, maze.droid.1),
-        x => panic!("Incorrect movement direction {}", x),
-    };
-    if maze.map.contains_key(&new_position) {
-        return maze.map.get(&new_position).unwrap().clone();
-    }
-    go(code, maze, movement);
-    if maze.droid == new_position {
-        let back = match movement {
-            1 => 2,
-            2 => 1,
-            3 => 4,
-            4 => 3,
-            _ => panic!("wat"),
-        };
-        go(code, maze, back);
-    }
-    return maze.map.get(&new_position).unwrap().clone();
-}
-
-fn look_around(code: &mut Intcode, maze: &mut Maze) -> Vec<i64> {
-    let mut result = Vec::new();
-    let mut ways = 0;
-    for movement in 1..=4 {
-        if go_and_return(code, maze, movement) == '.' {
-            ways += 1;
-            result.push(movement);
-        }
-    }
-
-    if ways == 1 {
-        maze.map.insert(maze.droid, maze.depth);
-    }
-    result
-}
-
-fn backtrack(code: &mut Intcode, maze: &mut Maze) {
-    loop {
-        maze.map.insert(maze.droid, 'Z');
-        for movement in 1..=4 {
-            let tile = go_and_return(code, maze, movement);
-            if tile == maze.depth {
-                go(code, maze, movement);
-                break;
-            }
-            if tile == '?' {
-                go(code, maze, movement);
-                maze.map.insert(maze.droid, '.');
-                maze.depth = (maze.depth as u8 - 1) as char;
-                return;
-            }
-        }
-    }
-}
-
-fn explore(code: &mut Intcode, maze: &mut Maze, max_steps: i32) -> Result<()> {
-    let mut oxygen_found = false;
-    for _ in 0..max_steps {
-        let options = look_around(code, maze);
-        match options.len() {
+    fn go(&mut self, movement: Direction) {
+        let new_position = position_at(self.droid, movement);
+        self.bottom = max(self.bottom, new_position.1+1);
+        self.top = min(self.top, new_position.1);
+        self.left = min(self.left, new_position.0);
+        self.right = max(self.right, new_position.0+1);
+        self.code.input.clear();
+        self.code.input.push(movement.to_i64().unwrap());
+        match self.code.next().unwrap() {
             0 => {
-                if maze.depth == 'a' {
-                    return Ok(());
-                }
-                backtrack(code, maze);
+                self.map.insert(new_position, '#');
             },
             1 => {
-                go(code, maze, options[0]);
+                self.map.insert(new_position, '.');
+                self.droid = new_position;
             },
-            _ => {
-                maze.map.insert(maze.droid, '?');
-                maze.depth = (maze.depth as u8 + 1) as char;
-                go(code, maze, options[0]);
+            2 => {
+                self.map.insert(new_position, '.');
+                self.droid = new_position;
+                self.oxygen = Some(self.droid);
+            },
+            x => {
+                panic!("Got {}", x);
             }
         }
-        if maze.oxygen != None && !oxygen_found {
-            oxygen_found = true;
-            let result = maze.map.values()
-                .filter(|&&c| (c >= 'a' && c <= 'z') || c == '?')
-                .count();
-            println!("Result: {}", result);
-        }
     }
-    Ok(())
-}
 
+    fn check(&mut self, movement: Direction) -> char {
+        let new_position = position_at(self.droid, movement);
+        if self.map.contains_key(&new_position) {
+            return self.map.get(&new_position).unwrap().clone();
+        }
+        self.go(movement);
+        if self.droid == new_position {
+            self.go(match movement {
+                Direction::North => Direction::South,
+                Direction::South => Direction::North,
+                Direction::East => Direction::West,
+                Direction::West => Direction::East,
+            });
+        }
+        return self.map.get(&new_position).unwrap().clone();
+    }
 
-fn neighbours(pos: (i32, i32)) -> [(i32, i32); 4] {
-    [(pos.0+1, pos.1),
-     (pos.0-1, pos.1),
-     (pos.0, pos.1+1),
-     (pos.0, pos.1-1)]
-}
+    fn look_around(&mut self) -> Vec<Direction> {
+        (1..=4)
+            .map(|d| Direction::from_i64(d).unwrap())
+            .filter(|&d| self.check(d) == '.')
+            .collect()
+    }
 
-
-fn flood_oxygen(maze: &mut Maze) -> i32 {
-    let mut result = 0;
-    let mut sources = HashSet::new();
-    maze.map.insert(maze.oxygen.unwrap(), 'O');
-    sources.insert(maze.oxygen.unwrap());
-    loop {
-        let mut new_sources = HashSet::new();
-        for source in sources.drain() {
-            for neighbour in neighbours(source).into_iter() {
-                let obj = *maze.map.get(&neighbour).unwrap();
-                if obj != 'O' && obj != '#' {
-                    maze.map.insert(neighbour.clone(), 'O');
-                    new_sources.insert(neighbour.clone());
+    fn backtrack(&mut self) {
+        loop {
+            self.map.insert(self.droid, 'Z');
+            for d in 1..=4 {
+                let movement = Direction::from_i64(d).unwrap();
+                let tile = self.check(movement);
+                if tile == self.depth {
+                    self.go(movement);
+                    break;
+                }
+                if tile == '?' {
+                    self.go(movement);
+                    self.map.insert(self.droid, '.');
+                    self.depth = (self.depth as u8 - 1) as char;
+                    return;
                 }
             }
         }
-        if new_sources.is_empty() {
-            break;
-        }
-        sources = new_sources;
-        result += 1;
     }
-    result
-}
 
+    fn explore(&mut self, max_steps: i32) -> Result<()> {
+        let mut oxygen_found = false;
+        for _ in 0..max_steps {
+            let options = self.look_around();
+            match options.len() {
+                0 => {
+                    if self.depth == 'a' {
+                        break;
+                    }
+                    self.backtrack();
+                },
+                1 => {
+                    self.map.insert(self.droid, self.depth);
+                    self.go(options[0]);
+                },
+                _ => {
+                    self.map.insert(self.droid, '?');
+                    self.depth = (self.depth as u8 + 1) as char;
+                    self.go(options[0]);
+                }
+            }
+            if self.oxygen != None && !oxygen_found {
+                oxygen_found = true;
+                let result = self.map.values()
+                    .filter(|&&c| c.is_ascii_lowercase() || c == '?')
+                    .count();
+                println!("Result: {}", result);
+            }
+        }
+        Ok(())
+    }
+
+    fn flood_oxygen(&mut self) -> i32 {
+        let mut result = 0;
+        let mut sources = HashSet::new();
+        self.map.insert(self.oxygen.unwrap(), 'O');
+        sources.insert(self.oxygen.unwrap());
+        loop {
+            let mut new_sources = HashSet::new();
+            for source in sources.drain() {
+                for neighbour in neighbours(source).into_iter() {
+                    let obj = *self.map.get(&neighbour).unwrap();
+                    if obj != 'O' && obj != '#' {
+                        self.map.insert(neighbour.clone(), 'O');
+                        new_sources.insert(neighbour.clone());
+                    }
+                }
+            }
+            if new_sources.is_empty() {
+                break;
+            }
+            sources = new_sources;
+            result += 1;
+        }
+        result
+    }
+}
 
 fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
 
     let mut opts = Options::new();
-    opts.optopt("m", "", "", "FILE");
     opts.optopt("s", "", "", "");
     let matches = opts.parse(&args[1..])?;
     let program = Program::load(matches.free.iter().next());
-    let mut code = Intcode::new(&program, vec![]);
-    let mut maze = Maze::new();
+    let code = Intcode::new(&program, vec![]);
+    let mut maze = Maze::new(code);
     let max_steps = match matches.opt_str("s") {
         None => std::i32::MAX,
         Some(s) => s.parse::<i32>()?,
     };
-    explore(&mut code, &mut maze, max_steps)?;
+    maze.explore(max_steps)?;
     /*
     println!("------------------");
     maze.draw();
     println!("Droid at {}:{}", maze.droid.0, maze.droid.1);
     */
-    let result2 = flood_oxygen(&mut maze);
-    println!("Result2: {}", result2);
+    println!("Result2: {}", maze.flood_oxygen());
 
     Ok(())
 }
