@@ -3,7 +3,7 @@ extern crate num_derive;
 
 use anyhow::Result;
 use getopts::Options;
-use num_traits::cast::{FromPrimitive, ToPrimitive};
+use num_traits::cast::ToPrimitive;
 use std::cmp::{max, min};
 use std::collections::{HashMap, HashSet};
 use std::env;
@@ -12,13 +12,15 @@ mod intcode;
 
 use crate::intcode::{Intcode, Program};
 
-#[derive(FromPrimitive, ToPrimitive, Clone, Copy)]
+#[derive(ToPrimitive, Clone, Copy)]
 enum Direction {
     North = 1,
     South = 2,
     West = 3,
     East = 4,
 }
+
+static ALL_DIRECTIONS: [Direction; 4] = [Direction::North, Direction::South, Direction::East, Direction::West];
 
 fn position_at(position: (i32, i32), direction: Direction) -> (i32, i32) {
     match direction {
@@ -121,25 +123,17 @@ impl Maze {
         return self.map.get(&new_position).unwrap().clone();
     }
 
-    fn look_around(&mut self) -> Vec<Direction> {
-        (1..=4)
-            .map(|d| Direction::from_i64(d).unwrap())
-            .filter(|&d| self.check(d) == '.')
-            .collect()
-    }
-
     fn backtrack(&mut self) {
         loop {
             self.map.insert(self.droid, 'Z');
-            for d in 1..=4 {
-                let movement = Direction::from_i64(d).unwrap();
-                let tile = self.check(movement);
+            for movement in &ALL_DIRECTIONS {
+                let tile = self.check(*movement);
                 if tile == self.depth {
-                    self.go(movement);
+                    self.go(*movement);
                     break;
                 }
                 if tile == '?' {
-                    self.go(movement);
+                    self.go(*movement);
                     self.map.insert(self.droid, '.');
                     self.depth = (self.depth as u8 - 1) as char;
                     return;
@@ -148,26 +142,28 @@ impl Maze {
         }
     }
 
-    fn explore(&mut self, max_steps: i32) -> Result<()> {
+    fn explore(&mut self, max_steps: i32) {
         let mut oxygen_found = false;
         for _ in 0..max_steps {
-            let options = self.look_around();
-            match options.len() {
-                0 => {
+            let mut options = ALL_DIRECTIONS.iter()
+                .map(|&d| d)
+                .filter(|&d| self.check(d) == '.');
+            match options.next() {
+                None => {
                     if self.depth == 'a' {
                         break;
                     }
                     self.backtrack();
                 },
-                1 => {
-                    self.map.insert(self.droid, self.depth);
-                    self.go(options[0]);
+                Some(direction) => {
+                    if options.count() == 0 {
+                        self.map.insert(self.droid, self.depth);
+                    } else {
+                        self.map.insert(self.droid, '?');
+                        self.depth = (self.depth as u8 + 1) as char;
+                    }
+                    self.go(direction);
                 },
-                _ => {
-                    self.map.insert(self.droid, '?');
-                    self.depth = (self.depth as u8 + 1) as char;
-                    self.go(options[0]);
-                }
             }
             if self.oxygen != None && !oxygen_found {
                 oxygen_found = true;
@@ -177,7 +173,6 @@ impl Maze {
                 println!("Result: {}", result);
             }
         }
-        Ok(())
     }
 
     fn flood_oxygen(&mut self) -> i32 {
@@ -219,7 +214,7 @@ fn main() -> Result<()> {
         None => std::i32::MAX,
         Some(s) => s.parse::<i32>()?,
     };
-    maze.explore(max_steps)?;
+    maze.explore(max_steps);
     /*
     println!("------------------");
     maze.draw();
