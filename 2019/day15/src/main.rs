@@ -7,6 +7,7 @@ use num_traits::cast::ToPrimitive;
 use std::cmp::{max, min};
 use std::collections::{HashMap, HashSet};
 use std::env;
+use std::iter::successors;
 
 mod intcode;
 
@@ -29,13 +30,6 @@ fn position_at(position: (i32, i32), direction: Direction) -> (i32, i32) {
         Direction::West => (position.0 + 1, position.1),
         Direction::East => (position.0 - 1, position.1),
     }
-}
-
-fn neighbours(pos: (i32, i32)) -> [(i32, i32); 4] {
-    [position_at(pos, Direction::North),
-     position_at(pos, Direction::South),
-     position_at(pos, Direction::East),
-     position_at(pos, Direction::West)]
 }
 
 struct Maze {
@@ -175,29 +169,32 @@ impl Maze {
         }
     }
 
+    fn flood_step(&mut self, sources: &HashSet<(i32, i32)>) -> Option<HashSet<(i32, i32)>> {
+        let mut new_sources = HashSet::new();
+        for &source in sources.iter() {
+            for &direction in ALL_DIRECTIONS.iter() {
+                let neighbour = position_at(source, direction);
+                let obj = *self.map.get(&neighbour).unwrap();
+                if obj != 'O' && obj != '#' {
+                    self.map.insert(neighbour.clone(), 'O');
+                    new_sources.insert(neighbour);
+                }
+            }
+        }
+        if new_sources.is_empty() {
+            None
+        } else {
+            Some(new_sources)
+        }
+    }
+
     fn flood_oxygen(&mut self) -> i32 {
-        let mut result = 0;
         let mut sources = HashSet::new();
         self.map.insert(self.oxygen.unwrap(), 'O');
         sources.insert(self.oxygen.unwrap());
-        loop {
-            let mut new_sources = HashSet::new();
-            for source in sources.drain() {
-                for neighbour in neighbours(source).into_iter() {
-                    let obj = *self.map.get(&neighbour).unwrap();
-                    if obj != 'O' && obj != '#' {
-                        self.map.insert(neighbour.clone(), 'O');
-                        new_sources.insert(neighbour.clone());
-                    }
-                }
-            }
-            if new_sources.is_empty() {
-                break;
-            }
-            sources = new_sources;
-            result += 1;
-        }
-        result
+        successors(Some(sources),
+                   |s| self.flood_step(s))
+            .count() as i32 -1
     }
 }
 
