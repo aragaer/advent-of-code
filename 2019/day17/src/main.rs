@@ -1,7 +1,9 @@
 #[macro_use]
 extern crate num_derive;
 
-use anyhow::{anyhow, Result};
+#[cfg(debug_assertions)]
+use anyhow::anyhow;
+use anyhow::Result;
 use getopts::Options;
 use itertools::Itertools;
 use std::cmp::max;
@@ -22,6 +24,7 @@ enum Direction {
 
 static ALL_DIRECTIONS: [Direction; 4] = [Direction::North, Direction::South, Direction::East, Direction::West];
 
+#[cfg(debug_assertions)]
 fn rotate(direction: Direction, turn: &str) -> Direction {
     if turn == "L" {
         match direction {
@@ -49,6 +52,7 @@ fn position_at(position: (isize, isize), direction: Direction) -> (isize, isize)
     }
 }
 
+#[cfg(debug_assertions)]
 struct Robot {
     pos: (isize, isize),
     dir: Direction,
@@ -87,6 +91,7 @@ impl Map {
         }
     }
 
+    #[cfg(debug_assertions)]
     fn draw(&self) {
         for y in 0..self.height {
             let s: String = (0..self.width)
@@ -96,14 +101,18 @@ impl Map {
         }
     }
 
-    fn find_robot(&self) -> Robot {
+    #[cfg(debug_assertions)]
+    fn find_robot(&mut self) -> Robot {
         let pos = (0..self.width)
             .cartesian_product(0..self.height)
             .find(|pos| *self.map.get(pos).unwrap() == '^')
             .unwrap();
+        self.map.insert(pos,'#');
+        println!("Robot starts at {:?}", pos);
         Robot{pos, dir: Direction::North}
     }
 
+    #[cfg(debug_assertions)]
     fn explore(&self, robot: &mut Robot) -> Vec<String> {
         let mut robot_direction = robot.dir;
         let mut pos = robot.pos;
@@ -156,6 +165,7 @@ impl Map {
     }
 }
 
+#[cfg(debug_assertions)]
 fn step(robot: &mut Robot, map: &Map, command: &str) -> Result<()> {
     if command == "L" {
         robot.dir = rotate(robot.dir, "L");
@@ -179,8 +189,11 @@ fn main() -> Result<()> {
     let opts = Options::new();
     let matches = opts.parse(&args[1..])?;
     let mut program = Program::load(matches.free.iter().next());
-    let mut map = Map::from(&mut Intcode::new(&program));
-    // map.draw();
+    let map = Map::from(&mut Intcode::new(&program));
+    #[cfg(debug_assertions)]
+    let mut map = map;
+    #[cfg(debug_assertions)]
+    map.draw();
 
     let result = (0..map.width).cartesian_product(0..map.height)
         .filter(|pos| *map.map.get(pos).unwrap() == '#')
@@ -192,11 +205,8 @@ fn main() -> Result<()> {
         .sum::<isize>();
     println!("Result: {}", result);
 
-    /*
+    #[cfg(debug_assertions)]
     let mut robot = map.find_robot();
-    map.map.insert(robot.pos, '#');
-    println!("Robot starts at {:?}", robot.pos);
-    */
 
     let mov_main: Vec<&str> = vec!["A", "A",
                                    "B", "C", "B", "C", "B", "C",
@@ -204,37 +214,39 @@ fn main() -> Result<()> {
     let mov_a = vec!["R", "10", "L", "12", "R", "6"];
     let mov_b = vec!["R", "6", "R", "10", "R", "12", "R", "6"];
     let mov_c = vec!["R", "10", "L", "12", "L", "12"];
-    /*
-    println!("{}", mov_main.join(",").len());
-    println!("{}", mov_a.join(",").len());
-    println!("{}", mov_b.join(",").len());
-    println!("{}", mov_c.join(",").len());
-    println!("=======");
 
-    let mut movs = HashMap::new();
-    movs.insert("A", &mov_a);
-    movs.insert("B", &mov_b);
-    movs.insert("C", &mov_c);
+    #[cfg(debug_assertions)]
+    {
+        println!("{}", mov_main.join(",").len());
+        println!("{}", mov_a.join(",").len());
+        println!("{}", mov_b.join(",").len());
+        println!("{}", mov_c.join(",").len());
+        println!("=======");
 
-    for mov in &mov_main {
-        let routine = movs.get(mov).unwrap();
-        for command in routine.iter() {
-            step(&mut robot, &map, command)?;
+        let mut movs = HashMap::new();
+        movs.insert("A", &mov_a);
+        movs.insert("B", &mov_b);
+        movs.insert("C", &mov_c);
+
+        for mov in &mov_main {
+            let routine = movs.get(mov).unwrap();
+            for command in routine.iter() {
+                step(&mut robot, &map, command)?;
+            }
         }
+
+        map.map.insert(robot.pos, match robot.dir {
+            Direction::North => '^',
+            Direction::East => '>',
+            Direction::West => '<',
+            Direction::South => 'v',
+        });
+        map.draw();
+        map.map.insert(robot.pos, '#');
+
+        let steps = map.explore(&mut robot);
+        println!("{} steps left", steps.len());
     }
-
-    map.map.insert(robot.pos, match robot.dir {
-        Direction::North => '^',
-        Direction::East => '>',
-        Direction::West => '<',
-        Direction::South => 'v',
-    });
-    map.draw();
-    map.map.insert(robot.pos, '#');
-
-    let steps = map.explore(&mut robot);
-    println!("{} steps left", steps.len());
-    */
 
     program.set(0, 2);
     let mut code = Intcode::new(&program);
@@ -250,10 +262,9 @@ fn main() -> Result<()> {
     for o in code {
         if o > 255 {
             println!("Result2: {}", o);
-            /*
         } else {
+            #[cfg(debug_assertions)]
             print!("{}", o as u8 as char);
-            */
         }
     }
 
