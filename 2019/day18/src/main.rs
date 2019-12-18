@@ -1,8 +1,9 @@
 use anyhow::Result;
 use getopts::Options;
+#[cfg(debug_assertions)]
 use itertools::Itertools;
 use num::complex::Complex;
-use std::cmp::{max, min};
+use std::cmp::max;
 use std::env;
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -69,22 +70,25 @@ impl Maze {
         Maze::from(&mut BufReader::new(fs::File::open(filename).unwrap()))
     }
 
-    fn way(&mut self, from: Complex<isize>, to: Complex<isize>) -> (usize, HashSet<char>) {
+    fn way(&mut self, from: Complex<isize>, to: Complex<isize>, stop_at: usize) -> Option<(usize, HashSet<char>)> {
         let c_from = *self.map.get(&from).unwrap();
         let c_to = *self.map.get(&to).unwrap();
         if self.distances.contains_key(&(c_from, c_to)) {
-            return self.distances.get(&(c_from, c_to)).unwrap().clone();
+            return Some(self.distances.get(&(c_from, c_to)).unwrap().clone());
         }
         let mut queue: Vec<(_, usize, HashSet<char>)> = vec![(from, 0, HashSet::new())];
         let mut visited = HashSet::new();
         loop {
             let (pos, dist, found) = queue.remove(0);
+            if stop_at == dist {
+                return None;
+            }
             visited.insert(pos);
             for &neigh in &[pos+1, pos-1, pos+Complex::i(), pos-Complex::i()] {
                 if neigh == to {
                     self.distances.insert((c_from, c_to), (dist+1, found.clone()));
                     self.distances.insert((c_to, c_from), (dist+1, found.clone()));
-                    return (dist+1, found);
+                    return Some((dist+1, found));
                 }
                 if visited.contains(&neigh) {
                     continue;
@@ -102,46 +106,59 @@ impl Maze {
         }
     }
 
-    fn flood_scan(&mut self) -> HashMap<char, HashSet<char>> {
+    fn flood_scan(&mut self) -> (HashMap<char, HashSet<char>>, HashMap<char, usize>) {
         let mut result = HashMap::new();
-        let mut queue = vec![(self.entrance, 0, HashSet::new())];
+        let mut reachable_from = HashMap::new();
         let mut visited = HashSet::new();
-        while !queue.is_empty() {
-            let (pos, dist, reqs) = queue.remove(0);
-            visited.insert(pos);
-            for &neigh in &[pos+1, pos-1, pos+Complex::i(), pos-Complex::i()] {
-                if visited.contains(&neigh) {
-                    continue;
+        self.map.insert(self.entrance+1, '#');
+        self.map.insert(self.entrance-1, '#');
+        self.map.insert(self.entrance+Complex::i(), '#');
+        self.map.insert(self.entrance-Complex::i(), '#');
+        for (i, entrance) in [Complex::new(-1,-1), Complex::new(1,-1),
+                              Complex::new(-1,1), Complex::new(1,1)].iter()
+                             .map(|o| self.entrance+o)
+                             .enumerate() {
+                let mut queue = vec![(entrance, HashSet::new())];
+                while !queue.is_empty() {
+                    let (pos, reqs) = queue.remove(0);
+                    visited.insert(pos);
+                    for &neigh in &[pos+1, pos-1, pos+Complex::i(), pos-Complex::i()] {
+                        if visited.contains(&neigh) {
+                            continue;
+                        }
+                        let mut my_reqs = reqs.clone();
+                        let c = *self.map.get(&neigh).unwrap_or(&' ');
+                        match c {
+                            '#' => {
+                                continue;
+                            },
+                            'a'..='z' => {
+                                result.insert(c, my_reqs.clone());
+                                reachable_from.insert(c, i);
+                            },
+                            'A'..='Z' => {
+                                my_reqs.insert(c.to_ascii_lowercase());
+                            },
+                            _ => {},
+                        }
+                        queue.push((neigh, my_reqs));
+                    }
                 }
-                let mut my_reqs = reqs.clone();
-                let c = *self.map.get(&neigh).unwrap_or(&' ');
-                match c {
-                    '#' => {
-                        continue;
-                    },
-                    'a'..='z' => {
-                        result.insert(c, my_reqs.clone());
-                    },
-                    'A'..='Z' => {
-                        my_reqs.insert(c.to_ascii_lowercase());
-                    },
-                    _ => {},
-                }
-                queue.push((neigh, dist+1, my_reqs));
             }
-        }
-        result
+        (result, reachable_from)
     }
 }
 
 fn collect_keys(maze: &mut Maze,
-                loc: Complex<isize>,
+                locs: Vec<Complex<isize>>,
                 key_reqs: &HashMap<char, HashSet<char>>,
-                keys: HashSet<char>) -> usize {
+                reachable_from: &HashMap<char, usize>) -> usize {
     let mut best = std::i32::MAX as usize;
-    let mut options: Vec<(Complex<isize>, usize, HashSet<char>)> = vec![(loc, 0, HashSet::new())];
+    let mut options: Vec<(Vec<Complex<isize>>, usize, HashSet<char>)> = vec![(locs, 0, HashSet::new())];
+    let total_keys = key_reqs.len();
+    dbg!(total_keys);
     while !options.is_empty() {
-        let (pos, result, found) = options.pop().unwrap();
+        let (locs, result, found) = options.pop().unwrap();
         if result >= best {
             continue;
         }
@@ -157,21 +174,25 @@ fn collect_keys(maze: &mut Maze,
                 if reqs.difference(&found).count() > 0 {
                     return None;
                 }
+                let ent = *reachable_from.get(&key).unwrap();
                 let k_pos = *maze.keys.get(&key).unwrap();
-                let (dist, w_found) = maze.way(pos, k_pos);
+                let (dist, w_found) = maze.way(locs[ent], k_pos, result-best)?;
                 if w_found.difference(&found).count() > 0 {
                     return None;
                 }
-                if result+dist >= best {
+                if result+dist+total_keys-found.len() >= best {
                     return None;
                 }
                 let mut n_found = found.clone();
                 n_found.insert(*key);
-                Some((k_pos, result+dist, n_found))
+                let mut n_locs = locs.clone();
+                n_locs[ent] = k_pos;
+                Some((n_locs, result+dist, n_found))
             })
             .collect();
         n_options.sort_by_key(|t| -(t.1 as isize));
         options.extend(n_options);
+        // println!("{}, {}", options.len(), found.len()+1);
     }
     best
 }
@@ -192,17 +213,23 @@ fn main() -> Result<()> {
         println!("{}", s);
     }
 
-    let key_reqs = maze.flood_scan();
+    let (key_reqs, reachable_from) = maze.flood_scan();
 
     #[cfg(debug_assertions)]
     for (key, reqs) in key_reqs.iter() {
-        println!("{}: {}", key, reqs.iter().cloned()
+        println!("{}: requires: {}, reachable from {}", key, reqs.iter().cloned()
                  .intersperse(',')
-                 .collect::<String>());
+                 .collect::<String>(),
+                 reachable_from.get(key).unwrap());
     }
 
     let start = maze.entrance.clone();
-    let result = collect_keys(&mut maze, start, &key_reqs, HashSet::new());
+    let result = collect_keys(&mut maze,
+                              [Complex::new(-1,-1), Complex::new(1,-1),
+                               Complex::new(-1,1), Complex::new(1,1)].iter()
+                              .map(|o| o+start)
+                              .collect(),
+                              &key_reqs, &reachable_from);
     println!("Result: {}", result);
     Ok(())
 }
