@@ -34,7 +34,7 @@ impl Maze {
         let mut portal_names = HashMap::new();
         let mut portal_links = HashMap::new();
         let mut seen_portal_chars = Vec::new();
-        let mut seen_portals: HashMap<String, Complex<isize>> = HashMap::new();
+        let mut seen_portals: HashMap<String, (Complex<isize>, Complex<isize>)> = HashMap::new();
         for c in reader.bytes().map(|b| b.unwrap() as char) {
             if c == '\n' {
                 y += 1;
