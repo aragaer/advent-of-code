@@ -1,11 +1,9 @@
-use anyhow::Result;
-use getopts::Options;
 use num::complex::Complex;
 use std::cmp::max;
 use std::env;
 use std::collections::{HashMap, HashSet};
 use std::collections::hash_map::Entry::{Occupied, Vacant};
-use std::fs;
+use std::fs::File;
 use std::io::{Read, BufReader};
 
 struct Maze {
@@ -97,7 +95,7 @@ impl Maze {
     }
 
     fn load(filename: &str) -> Maze {
-        Maze::from(&mut BufReader::new(fs::File::open(filename).unwrap()))
+        Maze::from(&mut BufReader::new(File::open(filename).unwrap()))
     }
 
     fn is_outside(&self, pos: Complex<isize>) -> bool {
@@ -139,20 +137,16 @@ impl Maze {
                     queue.push((neigh, depth, dist+1));
                 }
             }
-            // stick to upper levels -- speeds things up a lot
+            // stick to outer levels -- speeds things up a lot
             queue.sort_unstable_by_key(|t| t.1);
         }
         panic!("no exit");
     }
 }
 
-fn main() -> Result<()> {
+fn main() {
     let args: Vec<String> = env::args().collect();
-
-    let opts = Options::new();
-    let matches = opts.parse(&args[1..])?;
-
-    let maze = Maze::load(&matches.free[0]);
+    let maze = Maze::load(&args[1]);
 
     #[cfg(debug_assertions)]
     for y in 0..maze.height {
@@ -172,5 +166,4 @@ fn main() -> Result<()> {
     }
     println!("Result: {}", maze.go_to_exit(false));
     println!("Result2: {}", maze.go_to_exit(true));
-    Ok(())
 }
