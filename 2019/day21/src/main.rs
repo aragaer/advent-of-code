@@ -4,7 +4,7 @@ mod intcode;
 
 use crate::intcode::{Intcode, Program};
 
-fn run(program: &Program, instructions: Vec<&str>, command: &str) -> i64 {
+fn run(program: &Program, instructions: Vec<&str>) -> i64 {
     let mut code = Intcode::new(&program);
     loop {
         let o = code.next().unwrap();
@@ -25,10 +25,6 @@ fn run(program: &Program, instructions: Vec<&str>, command: &str) -> i64 {
         }
         code.input.push('\n' as i64);
     }
-    for c in command.chars() {
-        code.input.push(c as i64);
-    }
-    code.input.push('\n' as i64);
 
     for o in code {
         if o > 255 {
@@ -47,29 +43,24 @@ fn main() {
     let program = Program::load(args.get(1));
 
     let instructions = vec![
-        "NOT A J",
-        "NOT B T",
-        "NOT T T",
-        "AND C T",
-        "NOT T T",
-        "OR T J",
+        "OR A J",
+        "AND C J",
+        "NOT J J",
         "AND D J",
+        "WALK",
     ];
     let instructions2 = vec![
-        "NOT E J",
+        "OR A J",
+        "AND B J",
+        "AND C J",
         "NOT J J",
-        "AND I J",
-        "OR B J",
-        "NOT J J",
-        "NOT H T",
-        "OR C T",
-        "NOT T T",
-        "OR T J",
-        "NOT A T",
-        "OR T J",
         "AND D J",
+        "OR E T",
+        "OR H T",
+        "AND T J",
+        "RUN",
     ];
 
-    println!("Result: {}", run(&program, instructions, "WALK"));
-    println!("Result2: {}", run(&program, instructions2, "RUN"));
+    println!("Result: {}", run(&program, instructions));
+    println!("Result2: {}", run(&program, instructions2));
 }
