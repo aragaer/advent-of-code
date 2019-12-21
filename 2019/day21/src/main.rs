@@ -6,19 +6,6 @@ use crate::intcode::{Intcode, Program};
 
 fn run(program: &Program, instructions: Vec<&str>) -> i64 {
     let mut code = Intcode::new(&program);
-    loop {
-        let o = code.next().unwrap();
-        if o > 255 {
-            println!("Result: {}", o);
-        } else {
-            #[cfg(debug_assertions)]
-            print!("{}", o as u8 as char);
-            if o as u8 == b'\n' {
-                break;
-            }
-        }
-    }
-
     for line in instructions {
         for c in line.chars() {
             code.input.push(c as i64);
@@ -29,10 +16,9 @@ fn run(program: &Program, instructions: Vec<&str>) -> i64 {
     for o in code {
         if o > 255 {
             return o;
-        } else {
-            #[cfg(debug_assertions)]
-            print!("{}", o as u8 as char);
         }
+        #[cfg(debug_assertions)]
+        print!("{}", o as u8 as char);
     }
     panic!("Did not finish");
 }
