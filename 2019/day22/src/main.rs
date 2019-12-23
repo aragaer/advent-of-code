@@ -94,8 +94,7 @@ fn main() -> Result<()> {
 
     let (mut a, mut b) = shuffle_sequence.iter()
         .fold((1_i128, 0_i128),
-              |(a, b), shuffle|
-              match *shuffle {
+              |(a, b), shuffle| match *shuffle {
                   Shuffle::NewStack => ((size - a) % size, (size - b - 1) % size),
                   Shuffle::Cut(x) => (a, (b + size - x as i128) % size),
                   Shuffle::Increment(x) => ((a * x as i128) % size, (b * x as i128) % size),
@@ -104,12 +103,8 @@ fn main() -> Result<()> {
     println!("f(X) = {}X + {}", a, b);
 
     let (mut na, mut nb) = (1_i128, 0_i128);
-    for bit in successors(Some(times),
-                          |&n| if n > 1 {
-                              Some(n >> 1)
-                          } else {
-                              None
-                          })
+    for bit in successors(Some(times), |&n| Some(n >> 1))
+        .take_while(|&n| n > 0)
         .map(|bit| bit & 1 != 0) {
             if bit {
                 na = (na * a) % size;
