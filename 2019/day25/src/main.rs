@@ -72,11 +72,11 @@ impl Maze {
         lines
     }
 
-    fn read_room(&mut self) -> (String, HashSet<Direction>, Vec<String>) {
+    fn read_room(&mut self) -> (String, HashSet<Direction>, HashSet<String>) {
         let lines = self.read_output();
         let name = lines[3].clone();
         let mut doors = HashSet::new();
-        let mut items = Vec::new();
+        let mut items = HashSet::new();
         let mut list_of_doors = false;
         let mut list_of_items = false;
         for l in lines.iter() {
@@ -105,7 +105,7 @@ impl Maze {
                 });
             }
             if list_of_items {
-                items.push(l[2..].to_string());
+                items.insert(l[2..].to_string());
             }
         }
         (name, doors, items)
@@ -138,7 +138,11 @@ impl Maze {
         self.read_output();
     }
 
-    fn bring_items_to_checkpoint(&mut self) -> Vec<String> {
+    fn bring_items_to_checkpoint(&mut self) -> (Vec<String>, Direction) {
+        let mut bad_items = HashSet::new();
+        for bad in BAD_ITEMS.iter() {
+            bad_items.insert(bad.to_string());
+        }
         let mut inventory = Vec::new();
         /* It just happens that if I start with looking Eash
          * I will go North first and explore everything
@@ -146,30 +150,26 @@ impl Maze {
         let mut direction = Direction::East;
         loop {
             let (name, doors, items) = self.read_room();
-            if name == "== Security Checkpoint ==" {
-                break;
-            }
-            let directions = doors.clone();
-            for item in items.iter() {
-                if BAD_ITEMS.iter().find(|&&i| i == item) != None {
-                    continue;
-                }
+            for item in items.difference(&bad_items) {
                 self.take_item(&item);
                 inventory.push(item.to_string());
             }
             direction = successors(Some(direction.left()),
                                    |&d| Some(d.right()))
-                .find(|d| directions.contains(d))
+                .find(|d| doors.contains(d))
                 .unwrap();
+            if name == "== Security Checkpoint ==" {
+                break;
+            }
             self.go(direction);
         }
         for item in inventory.iter() {
             self.drop_item(&item);
         }
-        inventory
+        (inventory, direction)
     }
 
-    fn try_combo(&mut self, all_items: &[String], combo: i32) -> Option<String> {
+    fn try_combo(&mut self, all_items: &[String], combo: i32, to_exit: Direction) -> Option<String> {
         let l = all_items.len();
         let items_to_take: Vec<_> = successors(Some(1), |n| Some(n * 2))
             .take(l)
@@ -179,7 +179,7 @@ impl Maze {
         for &i in items_to_take.iter() {
             self.take_item(&all_items[i]);
         }
-        self.go(Direction::West);
+        self.go(to_exit);
         let lines = self.read_output();
         if &lines[11] != "" {
             return Some(lines[11].clone());
@@ -190,9 +190,9 @@ impl Maze {
         None
     }
 
-    fn guess_weight(&mut self, all_items: &[String]) -> String {
+    fn guess_weight(&mut self, all_items: &[String], to_exit: Direction) -> String {
         for combo in 0..2_i32.pow(all_items.len() as u32) {
-            if let Some(res) = self.try_combo(&all_items, combo) {
+            if let Some(res) = self.try_combo(&all_items, combo, to_exit) {
                 return res;
             }
         }
@@ -204,6 +204,6 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     let program = Program::load(args.get(1));
     let mut maze = Maze{0:Intcode::new(&program)};
-    let all_items = maze.bring_items_to_checkpoint();
-    println!("{}", maze.guess_weight(&all_items));
+    let (all_items, to_exit) = maze.bring_items_to_checkpoint();
+    println!("{}", maze.guess_weight(&all_items, to_exit));
 }
