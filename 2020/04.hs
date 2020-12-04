@@ -5,6 +5,7 @@ import Text.Read
 main = getContents >>= solve
 
 type Validator = String -> Bool
+
 rules :: [(String, Validator)]
 rules = [ ("byr", intInRange 1920 2002)
         , ("iyr", intInRange 2010 2020)
@@ -29,23 +30,21 @@ validHeight s = validHeight' suffix prefix
 
 validHair ('#':xs) = length xs == 6 && all isHexDigit xs
 validHair _        = False
+
 validPid s = length s == 9 && all isDigit s
 
-to_entries dat = map (map to_entry . words) $ f (tail ld) [] (head ld)
+toEntries = go [] . lines
   where
-    ld = lines dat
-    f [] r l = r ++ [l]
-    f ("":x:xs) r l = f xs (r ++ [l]) x
-    f (x:xs) r l = f xs r (l ++ " " ++ x)
-    to_entry (x:y:z:':':xs) = ([x,y,z], xs)
+    go acc [] = [toFields acc]
+    go acc ("":xs) = toFields acc : go [] xs
+    go acc (x:xs) = go (acc ++ ' ' : x) xs
+    toFields = map toField . words
+    toField (x:y:z:':':xs) = ([x,y,z], xs)
 
-validate1 entry = all isPresent rules
-  where isPresent (f, _) = isJust $ lookup f entry
-
-validate2 entry = all isValid rules
-  where isValid (f, v) = (v <$> lookup f entry) == Just True
+validate rules = ((flip all) rules) . check
+check e (f, v) = (v <$> lookup f e) == Just True
 
 solve dat = do
-  let entries = to_entries dat
-  print $ length $ filter validate1 entries
-  print $ length $ filter validate2 entries
+  let entries = toEntries dat
+  print $ length $ filter (validate $ map (const True <$) rules) entries
+  print $ length $ filter (validate rules) entries
