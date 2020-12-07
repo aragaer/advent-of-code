@@ -1,4 +1,5 @@
 import Data.List (find)
+import Data.Maybe
 import qualified Data.Set as S
 import Text.ParserCombinators.Parsec
 
@@ -11,7 +12,7 @@ rule = do
   color <- color
   string " bags contain "
   contents <- choice [ string "no other bags" >> pure []
-                     , (bag `sepBy` string ", ")]
+                     , bag `sepBy` string ", "]
   char '.'
   pure $ Rule color contents
 
@@ -38,20 +39,16 @@ parseRule line = case parse rule "" line of
 
 searchUp :: [Rule] -> Color -> [Color]
 searchUp rules color = do
-  matchingRule <- filter (any (== color) . map snd . getBags) rules
-  let thisColor = getColor matchingRule
+  thisColor <- getColor <$> filter (any (== color) . map snd . getBags) rules
   thisColor : searchUp rules thisColor
 
-searchDown :: [Rule] -> Color -> [Integer]
-searchDown rules color = do
-  let rule = case find ((== color) . getColor) rules of
-        Nothing -> error $ "Failed to find a rule for " ++ color
-        Just r -> r
-  (count, innerColor) <- getBags rule
-  pure $ count * (1 + (sum $ searchDown rules innerColor))
+searchDown :: [Rule] -> Color -> Integer
+searchDown rules color = sum $ do
+  (count, innerColor) <- getBags . fromJust $ find ((== color) . getColor) rules
+  pure $ count * (1 + searchDown rules innerColor)
 
-part1 rules = S.size . S.fromList $ searchUp rules "shiny gold"
-part2 rules = sum $ searchDown rules "shiny gold"
+part1 = S.size . S.fromList . (flip searchUp "shiny gold")
+part2 = flip searchDown "shiny gold"
 
 solve dat = do
   let rules = map parseRule $ lines dat
