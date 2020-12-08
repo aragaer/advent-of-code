@@ -3,41 +3,53 @@ import Text.ParserCombinators.Parsec
 
 main = getContents >>= solve
 
+data Instruction = Nop Int | Jmp Int | Acc Int deriving (Eq, Show)
+
 parseCode = map parseLine . lines
-  where parseLine line = case parse instruction "" line of
-          Left err -> error $ "Error in line [" ++ line ++ "]:\n" ++ show err
-          Right i -> i
-        instruction = do
-          ins <- many1 letter
-          space
-          sign <- char '-' <|> char '+'
-          val <- read <$> many1 digit
-          pure (ins, if sign == '-' then (- val) else val)
+  where
+    parseLine line = case parse instruction "" line of
+     Left err -> error $ "Error in line [" ++ line ++ "]:\n" ++ show err
+     Right i -> i
+    instruction = do
+      ins <- many1 letter
+      space
+      sign <- char '-' <|> char '+'
+      num <- read <$> many1 digit
+      let val = if sign == '-' then (- num) else num
+      pure $ case ins of
+        "nop" -> Nop val
+        "jmp" -> Jmp val
+        "acc" -> Acc val
 
 run code = go (0,0) empty
-  where go (acc,ip) seen | ip `member` seen  = Left acc
-                         | ip >= length code = Right acc
-                         | otherwise         = go (execute acc ip (code !! ip)) (ip `insert` seen)
+  where
+    go (acc,ip) seen | ip `member` seen  = Left acc
+                     | ip >= length code = Right acc
+                     | otherwise         = go ((compCode !! ip) (acc,ip)) (ip `insert` seen)
+    compCode = map toIns code
+    toIns (Nop v) = nop v
+    toIns (Jmp v) = jmp v
+    toIns (Acc v) = acc v
 
-execute acc ip ("nop",_) = (acc,ip+1)
-execute acc ip ("acc",val) = (acc+val,ip+1)
-execute acc ip ("jmp",val) = (acc,ip+val)
-
-nop (a,i) _ = (a,i+1)
-acc (a,i) v = (a+v,i+1)
-jmp (a,i) v = (a,i+v)
+nop _ (a,i) = (a,i+1)
+acc v (a,i) = (a+v,i+1)
+jmp v (a,i) = (a,i+v)
 
 part1 code = case run code of
   Left l  -> l
   Right _ -> error "Expected to loop"
 
 part2 code = head $ do
-  (i, (c,v)) <- filter ((`elem` ["jmp", "nop"]) . fst . snd) $ zip [0..] code
-  let c' = if c == "jmp" then "nop" else "jmp"
-  let code' = take i code ++ (c',v) : drop (i+1) code
+  (i, c) <- zip [0..] code
+  c' <- changeInstruction c
+  let code' = take i code ++ c' : drop (i+1) code
   case run code' of
     Left _  -> fail "infinite loop"
     Right r -> pure r
+  where
+    changeInstruction (Nop v) = pure (Jmp v)
+    changeInstruction (Jmp v) = pure (Nop v)
+    changeInstruction (Acc _) = fail "do not change acc"
 
 solve dat = do
   let code = parseCode dat
