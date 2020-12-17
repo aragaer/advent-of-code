@@ -7,32 +7,32 @@ main = getContents >>= solve
 type Rule = (String,[Int])
 type Ticket = [Int]
 
+inputData :: GenParser Char st ([Rule],Ticket,[Ticket])
+inputData = do
+  rules <- (rule <* char '\n') `manyTill` char '\n'
+  string "your ticket:\n"
+  my <- ticket
+  string "\n\nnearby tickets:\n"
+  other <- ticket `sepEndBy` char '\n'
+  pure (rules,my,other)
+
+number :: GenParser Char st Int
+number = read <$> many1 digit
+
 ticket :: GenParser Char st Ticket
-ticket = (read <$> many1 digit) `sepEndBy` char ','
+ticket = number `sepBy` char ','
 
 rule :: GenParser Char st Rule
 rule = do
-  field <- many1 (noneOf ":")
-  string ": "
-  ranges <- range `sepEndBy` string " or "
-  pure (field,concatMap (\(s,e)->[s..e]) ranges)
-
-range :: GenParser Char st (Int,Int)
-range = do
-  s <- read <$> many1 digit
-  char '-'
-  e <- read <$> many1 digit
-  pure (s,e)
-
-toSections = go [] . lines
-  where
-    go acc [] = [acc]
-    go acc ("":xs) = acc : go [] xs
-    go acc (x:xs) = go (acc ++ [x]) xs
-
-f = \case
-  Left err -> error $ show err
-  Right x -> x
+  field <- anyChar `manyTill` char ':'
+  space
+  ranges <- concat <$> range `sepBy` string " or "
+  pure (field,ranges)
+  where range = do
+          s <- number
+          char '-'
+          e <- number
+          pure [s..e]
 
 invalid rules ticket = filter (\t -> not $ any (\(_,r) -> t `elem` r) rules) ticket
 
@@ -50,16 +50,13 @@ rulesToNumbers rules numbers (t:ts) = rulesToNumbers rules numbers' ts
   where numbers' = map (\(r,ns) -> valid r t ns) $ zip rules numbers
         valid (f,v) ticket numbers = filter (\n -> (ticket !! n) `elem` v) numbers
 
-removeUsed numbers = if length bad == 0 then numbers else removeUsed numbers'
+removeUsed numbers = if all isGood numbers then numbers else removeUsed numbers'
   where
-    bad = filter ((>1) . length) numbers
-    good = concat $ filter ((==1) . length) numbers
-    numbers' = map (\l -> if length l == 1 then l else filter (not . (`elem` good)) l) numbers
+    good = concat $ filter isGood numbers
+    isGood = (== 1) . length
+    numbers' = map (\l -> if isGood l then l else filter (not . (`elem` good)) l) numbers
 
 solve dat = do
-  let [r,m,o] = toSections dat
-  let my = f $ parse ticket "" (m !! 1)
-  let other = map (f . parse ticket "") $ tail o
-  let rules = map (f . parse rule "") r
+  let (rules,my,other) = either (error . show) id $ parse inputData "" dat
   print $ part1 rules other
   print $ part2 rules other my
