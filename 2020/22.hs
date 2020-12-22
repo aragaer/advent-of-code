@@ -1,11 +1,17 @@
+{-# LANGUAGE LambdaCase, TypeSynonymInstances, FlexibleInstances, TupleSections #-}
+import Control.Monad.State
 import Data.Either
 import Data.Function
-import qualified Data.Set as S
-import Text.ParserCombinators.Parsec
+import Data.Set (Set,member,insert,empty)
+import Text.ParserCombinators.Parsec (many1,digit,manyTill,sepEndBy,string,char,parse)
 
 (...) = (.) . (.)
 
-parseInput :: String -> ([Int],[Int])
+type D = [Int]
+type S = (D,D)
+type R = Either D D
+
+parseInput :: String -> S
 parseInput = either (error . show) id . parse inputData ""
   where inputData = do
           string "Player 1:\n"
@@ -14,34 +20,63 @@ parseInput = either (error . show) id . parse inputData ""
           p2 <- (read <$> many1 digit) `sepEndBy` char '\n'
           pure (p1,p2)
 
-part1 = either score score ... game1
-part2 = either score score ... game2 S.empty
+playGame :: GameState s => s -> Int
+playGame = either score score . evalState play
 
 score = sum . zipWith (*) [1..] . reverse
 
-game1 = check1 $ step game1 winner1
-game2 s = (check2 s) (\p1 p2 -> let s' = S.insert (p1,p2) s in step (game2 s') (winner2 s') p1 p2)
+class GameState s where
+  player1wins :: s -> Bool
+  gameEnded :: s -> Maybe R
+  p1wins :: s -> s
+  p2wins :: s -> s
+  seen :: s -> s
 
-check1 _ p [] = Left p
-check1 _ [] p = Right p
-check1 game p1 p2 = game p1 p2
+  play :: State s R
+  play = gets gameEnded >>= \case
+    Just w  -> pure w
+    Nothing -> do
+      modify seen
+      gets player1wins >>= \case
+        True  -> modify p1wins
+        False -> modify p2wins
+      play
 
-check2 s game p1 p2 = if (p1,p2) `S.member` s then Left p1 else check1 game p1 p2
+instance GameState S where
+  player1wins (a:_,b:_) = a > b
+  gameEnded (p,[]) = Just $ Left p
+  gameEnded ([],p) = Just $ Right p
+  gameEnded _      = Nothing
+  seen             = id
 
-step game winFunc = uncurry game ... gameRound winFunc
+  p1wins (c1:r1,c2:r2) = (r1++[c1,c2],r2)
+  p2wins (c1:r1,c2:r2) = (r1,r2++[c2,c1])
 
-gameRound player2wins p1 p2 = if player2wins p1 p2
-  then (tail p1,tail p2 ++ [head p2,head p1])
-  else (tail p1 ++ [head p1,head p2],tail p2)
+instance GameState (Set S,S) where
+  player1wins = evalState $ shouldSubgame >>= \case
+      True  -> isLeft <$> subgame
+      False -> gets $ player1wins . snd
+  gameEnded (s,p) = if p `member` s then Just (Left $ fst p) else gameEnded p
+  seen (s,p)      = (p `insert` s,p)
 
-winner1 = (<) `on` head
-winner2 s p1 p2 = (if shouldSubgame p1 p2 then subgame s else winner1) p1 p2
-  where shouldSubgame = (&&) `on` \c -> length c > head c
-        subgame s = (isRight ... game2 s) `on` \(c:r) -> take c r
+  p1wins (s,p) = (s,p1wins p)
+  p2wins (s,p) = (s,p2wins p)
+
+shouldSubgame :: State (Set S,S) Bool
+shouldSubgame = do
+  (p1,p2) <- gets snd
+  pure $ head p1 < length p1 && head p2 < length p2
+
+subgame :: State (Set S,S) R
+subgame = withState p' play
+  where p' (s,(c1:r1,c2:r2)) = (s,(take c1 r1, take c2 r2))
 
 main = getContents >>= solve
 
 solve dat = do
-  let (p1,p2) = parseInput dat
-  print $ part1 p1 p2
-  print $ part2 p1 p2
+  let p = parseInput dat
+  print $ part1 p
+  print $ part2 p
+  where
+    part1 = playGame
+    part2 = playGame . (empty::Set S,)
