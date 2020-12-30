@@ -18,12 +18,11 @@ m'head = flip V.read 0
 
 melFromList :: [Int] -> IO MyEmulatedList
 melFromList l = do
-  m <- unsafeNew $ length l + 2
+  m <- unsafeNew $ length l + 1
   go m 0 l
   where go m i [] = do
           s <- m'head m
           V.write m i s
-          V.write m (length l + 1) i
           pure m
         go m i (x:xs) = V.write m i x >> go m x xs
 
@@ -44,7 +43,7 @@ gameMove m = do
   t2 <- V.read m t1
   t3 <- V.read m t2
   a <- V.read m t3
-  let h' = nontaken h [t1,t2,t3] (V.length m-2)
+  let h' = nontaken h [t1,t2,t3] (V.length m-1)
   b <- V.read m h'
 
   -- h->(t1->t2->t3)->a => h->a
