@@ -10,39 +10,33 @@ parse_one_line(Line) ->
     Links = string:substr(L3,24),
     {Name,Rate,string:lexemes(Links,", ")}.
 
-solve([],_,_,Res) -> Res;
-solve(_,[],_,Res) -> Res;
-solve(Rooms,[{T,L}|As],{Connectivity,Valves},{Res,A}) ->
-    {Ro,Ao} = solve(Rooms,As,{Connectivity,Valves},{Res,A}),
-    {Rt,At} = lists:foldl(fun ({R,D},{B,BA}) ->
-                                  NT = T-D-1,
-                                  E = maps:get(R,Valves),
-                                  {R1,A1} = solve(Rooms--[R],[{NT,R}|As],
-                                                  {Connectivity,Valves},
-                                                  {Res+E*NT,[{R,NT,length(As)}|A]}),
-                                  if R1 > B -> {R1,A1};
-                                     true -> {B,BA}
-                                  end
-                          end, {Res,A},
-                          lists:filtermap(fun (R) ->
-                                                  D = maps:get({L,R},Connectivity),
-                                                  if D < T -> {true,{R,D}};
-                                                     true -> false
-                                                  end
-                                          end, Rooms)),
-    if Ro > Rt -> {Ro,Ao};
-       true -> {Rt,At}
-    end.
-
 distances_from(Room,Rooms,Links) ->
     FromRoom = advent:bfs(Room,Links,fun maps:get/2),
     maps:from_list(lists:map(fun (R) -> {{Room,R},maps:get(R,FromRoom)} end, Rooms)).
 
-print_log(Actions,Time) ->
-    lists:foreach(fun ({R,T,A}) ->
-                          io:format("Minute ~p ~s open valve ~s~n",
-                                    [Time-T, lists:nth(A+1, ["I","Elephant"]), R])
-                  end, lists:sort(fun ({_,T1,_},{_,T2,_}) -> T1 > T2 end, Actions)).
+search([],Values,_,_) -> Values;
+search([{T,Value,Actions}|Queue],Values,Connectivity,Valves) ->
+    Last = if Actions == [] -> "AA";
+              true -> hd(Actions)
+           end,
+    New = lists:filtermap(fun (L) ->
+                                  D = maps:get({Last,L},Connectivity),
+                                  if T > D + 1 ->
+                                          TL = T-D-1,
+                                          E = maps:get(L,Valves) * TL,
+                                          {true, {TL,E+Value,[L|Actions]}};
+                                     true -> false
+                                  end
+                           end, maps:keys(Valves) -- Actions),
+    search(lists:append(Queue,New),
+           lists:foldl(fun ({_,NV,A},V) ->
+                               Key = lists:sort(A),
+                               {OldValue,_} = maps:get(Key,V,{0,nil}),
+                               if OldValue > NV -> V;
+                                  true -> maps:put(Key,{NV,A},V)
+                               end
+                       end, Values, New),
+           Connectivity,Valves).
 
 main(Args) ->
     {Rooms,Links} = lists:foldl(fun ([],A) -> A;
@@ -57,13 +51,17 @@ main(Args) ->
                                end,
                                distances_from("AA",VRooms,Links),
                                VRooms),
-    {Res1,Actions1} = solve(VRooms,[{30,"AA"}],{Connectivity,Valves},{0,[]}),
-    {Res2,Actions2} = solve(VRooms,[{26,"AA"},{26,"AA"}],{Connectivity,Valves},{0,[]}),
-    io:format("~p~n", [Res1]),
-    if Args == [] -> nothing;
-       true -> print_log(Actions1,30)
+    X = search([{30,0,[]}],maps:new(),Connectivity,Valves),
+    {Res1,A11} = lists:max(maps:values(X)),
+    io:format("~p", [Res1]),
+    if Args == [] -> io:format("~n");
+       true -> io:format(" ~p~n", [lists:reverse(A11)])
     end,
-    io:format("~p~n", [Res2]),
-    if Args == [] -> nothing;
-       true -> print_log(Actions2,26)
+    Y = search([{26,0,[]}],maps:new(),Connectivity,Valves),
+    {Res2,A21,A22} = lists:max([{V1+V2,A1,A2} || {K1,{V1,A1}} <- maps:to_list(Y),
+                                                 {K2,{V2,A2}} <- maps:to_list(Y),
+                                                 K1 -- K2 == K1]),
+    io:format("~p", [Res2]),
+    if Args == [] -> io:format("~n");
+       true -> io:format(" ~p ~p~n", [lists:reverse(A21),lists:reverse(A22)])
     end.
