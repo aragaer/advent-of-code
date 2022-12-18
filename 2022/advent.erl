@@ -35,7 +35,13 @@ move({X,Y},down) -> {X,Y-1};
 move({X,Y},left) -> {X-1,Y};
 move({X,Y},right) -> {X+1,Y};
 move({X,Y},upleft) -> {X-1,Y+1};
-move({X,Y},upright) -> {X+1,Y+1}.
+move({X,Y},upright) -> {X+1,Y+1};
+move({X,Y,Z},up) -> {X,Y+1,Z};
+move({X,Y,Z},down) -> {X,Y-1,Z};
+move({X,Y,Z},left) -> {X-1,Y,Z};
+move({X,Y,Z},right) -> {X+1,Y,Z};
+move({X,Y,Z},forward) -> {X,Y,Z+1};
+move({X,Y,Z},back) -> {X,Y,Z-1}.
 
 % partial
 move(C) -> fun (D) -> move(C,D) end.
