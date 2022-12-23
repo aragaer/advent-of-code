@@ -36,6 +36,8 @@ move({X,Y},left) -> {X-1,Y};
 move({X,Y},right) -> {X+1,Y};
 move({X,Y},upleft) -> {X-1,Y+1};
 move({X,Y},upright) -> {X+1,Y+1};
+move({X,Y},downleft) -> {X-1,Y-1};
+move({X,Y},downright) -> {X+1,Y-1};
 move({X,Y,Z},up) -> {X,Y+1,Z};
 move({X,Y,Z},down) -> {X,Y-1,Z};
 move({X,Y,Z},left) -> {X-1,Y,Z};
