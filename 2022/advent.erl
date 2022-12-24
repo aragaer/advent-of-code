@@ -1,7 +1,8 @@
 -module(advent).
 -import(maps,[put/3]).
 -import(lists,[filter/2,foldl/3]).
--export([get_int/0,read_all_lines/0,lines_to_2d_map/1,move/2,bfs/3,find_keys/2,move/1]).
+-export([get_int/0,read_all_lines/0,lines_to_2d_map/1,move/1,move/2,
+         bfs/3,bfs/4,find_keys/2]).
 
 get_int() ->
     case io:get_line("") of
@@ -49,13 +50,21 @@ move({X,Y,Z},back) -> {X,Y,Z-1}.
 move(C) -> fun (D) -> move(C,D) end.
 
 bfs(Start,Ctx,GetNeighsFun) ->
-    bfs([Start],maps:from_list([{Start,0}]),Ctx,GetNeighsFun).
+    {_,Seen} = bfs(Start,Ctx,GetNeighsFun, fun(_) -> false end),
+    Seen.
+bfs(Start,Ctx,GetNeighsFun,StopFun) ->
+    bfs([Start],maps:from_list([{Start,0}]),Ctx,GetNeighsFun,StopFun).
 
-bfs([],Seen,_,_) -> Seen;
-bfs([Pos|Queue],Seen,Ctx,GetNeighsFun) ->
-    New = filter(fun (N) -> not maps:is_key(N,Seen) end,
-                 GetNeighsFun(Pos,Ctx)),
-    TimeHere = maps:get(Pos, Seen),
-    bfs(lists:append(Queue,New),
-        foldl(fun (N,V) -> put(N,TimeHere+1,V) end, Seen, New),
-        Ctx, GetNeighsFun).
+bfs([],Seen,_,_,_) -> {exhausted,Seen};
+bfs([Pos|Queue],Seen,Ctx,GetNeighsFun,StopFun) ->
+    case StopFun(Pos) of
+        false ->
+            New = filter(fun (N) -> not maps:is_key(N,Seen) end,
+                         GetNeighsFun(Pos,Ctx)),
+            TimeHere = maps:get(Pos, Seen),
+            bfs(lists:append(Queue,New),
+                maps:merge(Seen,maps:from_list([{N,TimeHere+1} || N <- New])),
+                Ctx, GetNeighsFun, StopFun);
+        Res -> {Res,Seen}
+    end.
+
