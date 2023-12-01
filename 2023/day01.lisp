@@ -7,14 +7,22 @@
 
 (ql:quickload :str :silent t)
 
-(defun get-digit (line substs)
-  (loop for ptr = line then (subseq ptr 1)
+(defun r (line reverse-p)
+  (if reverse-p
+      (reverse line)
+      line))
+
+(defun get-digit (line substs &optional reverse-p)
+  (loop for ptr = (r line reverse-p) then (subseq ptr 1)
         until (str:emptyp ptr)
-        for res = (loop for (w . n) in substs
-                        if (str:starts-with-p w ptr)
-                          return n)
-        if res
-          return res))
+        thereis (loop for (w . n) in substs
+                      if (str:starts-with-p (r w reverse-p) ptr)
+                        return n)))
+
+(defun get-num (line substs)
+  (let ((fst (get-digit line substs))
+        (snd (get-digit line substs :reverse)))
+    (+ (* 10 fst) snd)))
 
 (defvar substs0
   (loop for x from 1 to 9
@@ -22,29 +30,13 @@
 
 (let ((digit-words '("one" "two" "three" "four" "five" "six" "seven" "eight" "nine")))
   (defvar substs1
-    (nconc
-     (loop for word in digit-words
-           for x = 1 then (+ x 1)
-           collect (cons word x))
-     substs0))
-  (defvar substs2
-    (nconc
-     (loop for word in digit-words
-           for x = 1 then (+ x 1)
-           collect (cons (reverse word) x))
-     substs0)))
+    (loop for word in digit-words
+          for x from 1
+          collect (cons word x))))
+(nconc substs1 substs0)
 
-(defun get-num (line substs1 substs2)
-  (let ((fst (get-digit line substs1))
-        (snd (get-digit (reverse line) substs2)))
-    (+ (* 10 fst) snd)))
-
-(defvar *lines*
-  (loop for line = (read-line *standard-input* nil nil)
-        while line
-        collect line))
-
-(loop for line in *lines*
-      sum (get-num line substs0 substs0) into total1
-      sum (get-num line substs1 substs2) into total2
+(loop for line = (read-line *standard-input* nil nil)
+      while line
+      sum (get-num line substs0) into total1
+      sum (get-num line substs1) into total2
       finally (format t "~a~%~a~%" total1 total2))
