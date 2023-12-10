@@ -69,23 +69,17 @@
       until (equal new-location *start*)
       finally (format t "~a~%" (/ steps 2)))
 
-(dotimes (y *size-y*)
-  (let ((state :outside)
-        loop-came-from)
-    (dotimes (x *size-x*)
-      (let ((pos (cons y x)))
+(defun touches (directions)
+  (or (subsetp '(:n :w) directions)
+      (subsetp '(:s :e) directions)))
+
+(dotimes (d (+ *size-x* *size-y*))
+  (let ((state :outside))
+    (dotimes (y (+ d 1))
+      (let ((pos (cons y (- d y))))
         (if (eq :loop (gethash pos *states*))
-            (let ((loop-ends (intersection '(:n :s) (gethash pos *nodes*))))
-              (cond
-                ((and loop-came-from (member loop-came-from loop-ends))
-                 (setf loop-came-from nil))
-                ((and loop-came-from loop-ends)
-                 (setf state (flip state)
-                       loop-came-from nil))
-                ((= 2 (length loop-ends))
-                 (setf state (flip state)))
-                (loop-ends
-                 (setf loop-came-from (car loop-ends)))))
+            (unless (touches (gethash pos *nodes*))
+              (setf state (flip state)))
             (setf (gethash pos *states*) state))))))
 
 (loop for v being the hash-values of *states*
