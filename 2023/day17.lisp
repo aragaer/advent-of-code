@@ -1,54 +1,57 @@
 #!/usr/bin/env -S sbcl --noinform --script
 
-#-quicklisp
-(let ((quicklisp-init (merge-pathnames "quicklisp/setup.lisp" (user-homedir-pathname))))
-  (when (probe-file quicklisp-init)
-    (load quicklisp-init)))
-
-(defvar *data*
+(defconstant *data*
   (loop for line = (read-line *standard-input* nil nil)
         while line
         collect (map 'list #'digit-char-p line) into lines
         finally (return (make-array `(,(length lines) ,(length (car lines)))
                                     :initial-contents lines))))
 
-(defvar *final-position*
+(defconstant *final-position*
   (destructuring-bind (y x) (array-dimensions *data*)
-    `(,(1- x) ,(1- y) 0 0 0)))
+    `(0 ,(1- x) ,(1- y) 0 0)))
 
-(defun solve (ultra-p)
+(defconstant *turns*
+  (loop for x in '(1 -1 #c(0 1) #c(0 -1))
+        with res = (make-hash-table :size 4)
+        do (setf (gethash x res) `(,(* x #c(0 1)) ,(* x #c(0 -1))))
+        finally (return res)))
+
+(defun solve (low high)
+  (declare (optimize (speed 3)))
   (loop with result
         with results = (make-hash-table :test #'equal)
-        with (low high) = (if ultra-p '(4 10) '(1 3))
-        for (x y prev-dir prev-len heat-loss) = *final-position* then (pop options)
-        for new-options = (loop for dir in '(1 -1 #c(0 1) #c(0 -1))
-                                for nlen = (if (= dir prev-dir) (1+ prev-len) 1)
-                                for nx = (+ x (realpart dir))
-                                for ny = (+ y (imagpart dir))
-                                for new-heat-loss = (+ heat-loss (aref *data* y x))
-                                for key = (list nx ny dir nlen)
-                                for best = (gethash key results
-                                                    (and result (+ result nx ny)))
-                                if (and (/= dir (- prev-dir))
-                                        (>= high nlen)
-                                        (or (= dir prev-dir)
-                                            (= 0 prev-dir)
-                                            (>= prev-len low))
-                                        (array-in-bounds-p *data* ny nx)
-                                        (or (null best) (< new-heat-loss best)))
-                                  collect (list nx ny dir nlen new-heat-loss)
-                                  and do (setf (gethash key results) new-heat-loss))
-        for options = new-options then (nconc new-options options)
-        if result
-          do (setf options (delete-if (lambda (o)
-                                        (destructuring-bind (x y _ _ h) o
-                                          (> h (+ x y result))))
-                                      options))
-        if (and (= 0 x) (= 0 y))
-          do (setf result (if result
-                              (min result heat-loss)
-                              heat-loss))
+        for (heat-loss x y prev-dir prev-len) = *final-position* then (pop options)
+        for dirs = `((,low . -1) (,low . #c(0 -1)))
+          then (unless (and result (< result (+ heat-loss x y)))
+                 (append (if (> high prev-len) `((1 . ,prev-dir)))
+                         (map 'list
+                              (lambda (turn) (cons low turn))
+                              (gethash prev-dir *turns*))))
+        for new = (loop for (dist . dir) in dirs
+                        for nlen = (+ dist (if (= dir prev-dir) prev-len 0))
+                        for nx = (+ x (* dist (realpart dir)))
+                        for ny = (+ y (* dist (imagpart dir)))
+                        for nh = (when (array-in-bounds-p *data* ny nx)
+                                   (+
+                                    (loop for i from 0 to (1- dist)
+                                          for tx = x then (+ tx (realpart dir))
+                                          for ty = y then (+ ty (imagpart dir))
+                                          sum (aref *data* ty tx))
+                                    heat-loss))
+                        for key = (list nx ny dir nlen)
+                        for best = (gethash key results (and result (+ result nx ny)))
+                        if (and nh (or (null best) (< nh best)))
+                          collect (cons nh key) into new
+                          and do (setf (gethash key results) nh)
+                        finally (return (sort new #'<
+                                              :key (lambda (o)
+                                                     (destructuring-bind (h x y . _) o
+                                                       (+ h x y))))))
+        for options = new then (nconc new options)
+        if (and (= 0 x) (= 0 y) (or (not result) (< heat-loss result)))
+          do (setf result heat-loss)
         while options
         finally (return result)))
 
-(format t "~a~%~a~%" (solve nil) (solve t))
+(format t "~a~%~a~%" (solve 1 3) (solve 4 10))
