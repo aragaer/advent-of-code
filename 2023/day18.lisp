@@ -17,44 +17,31 @@
         collect (cons dir2 (parse-integer dist2 :radix 16)) into insns2
         finally (return (list insns1 insns2))))
 
+(defun shoelace (points)
+  (loop for (x1 . y1) in points
+        for (x2 . y2) in (cdr points)
+        sum (- (* x1 y2) (* x2 y1)) into result
+        finally (destructuring-bind ((x1 . y1) (xn . yn))
+                    (cons (car points) (last points))
+                  (let ((add (- (* xn y1) (* x1 yn))))
+                    (return (abs (/ (+ result add) 2)))))))
+
+(defun pick (area perimeter)
+  (+ area 1 (/ perimeter 2)))
+
 (defun solve (insns)
-  (let (prev-dir prev-height)
-    (destructuring-bind (y pos neg)
-        (loop for (dir . dist) in insns
-              with y = 0
-              with direction-at-deepest
-              if (eq dir #\U)
-                do (decf y dist)
-              if (eq dir #\D)
-                do (incf y dist)
-              if (member dir '(#\R #\L))
-                do (setf prev-dir dir
-                         prev-height y)
-              maximize y into max-dip
-              if (= y max-dip)
-                do (setf direction-at-deepest dir)
-              finally (return (cons max-dip
-                                    (if (eq direction-at-deepest #\L)
-                                        '(#\R #\L) '(#\L #\R)))))
+  (destructuring-bind (perimeter . points)
       (loop for (dir . dist) in insns
-            with result = 0
-            if (eq dir pos)
-              do (incf result (* (1+ y) (1+ dist)))
-            if (eq dir neg)
-              do (incf result (* (- y) (1+ dist)))
-            if (eq dir #\U)
-              do (incf y dist)
-            if (eq dir #\D)
-              do (decf y dist)
-            if (member dir '(#\R #\L))
-              do (let ((between (1- (abs (- prev-height y))))
-                       (below (1+ (min y prev-height))))
-                   (when (eq dir prev-dir)
-                     (setf result (funcall (if (eq dir pos) #'- #'+) result below)))
-                   (when (eq (if (< y prev-height) prev-dir dir) neg)
-                     (incf result between)))
-              and do (setf prev-dir dir
-                           prev-height y)
-            finally (return result)))))
+            with x = 0
+            with y = 0
+            collect (cons x y) into points
+            do (case dir
+                 (#\R (incf x dist))
+                 (#\D (decf y dist))
+                 (#\L (decf x dist))
+                 (#\U (incf y dist)))
+            sum dist into perimeter
+            finally (return (cons perimeter points)))
+    (pick (shoelace points) perimeter)))
 
 (format t "~{~a~%~}" (map 'list #'solve *insns*))
