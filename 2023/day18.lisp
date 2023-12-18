@@ -7,78 +7,54 @@
 
 (ql:quickload :str :silent t)
 
-(defvar *map* (make-hash-table))
+(defparameter *insns*
+  (loop for line = (read-line *standard-input* nil nil)
+        while line
+        for (dir1 dist1 color) = (str:words line)
+        for dist2 = (subseq color 2 7)
+        for dir2 = (char "RDLU" (digit-char-p (char color 7)))
+        collect (cons (char dir1 0) (parse-integer dist1)) into insns1
+        collect (cons dir2 (parse-integer dist2 :radix 16)) into insns2
+        finally (return (list insns1 insns2))))
 
-(setf (gethash 0 *map*) t)
+(defun solve (insns)
+  (let (prev-dir prev-height)
+    (destructuring-bind (y pos neg)
+        (loop for (dir . dist) in insns
+              with y = 0
+              with direction-at-deepest
+              if (eq dir #\U)
+                do (decf y dist)
+              if (eq dir #\D)
+                do (incf y dist)
+              if (member dir '(#\R #\L))
+                do (setf prev-dir dir
+                         prev-height y)
+              maximize y into max-dip
+              if (= y max-dip)
+                do (setf direction-at-deepest dir)
+              finally (return (cons max-dip
+                                    (if (eq direction-at-deepest #\L)
+                                        '(#\R #\L) '(#\L #\R)))))
+      (loop for (dir . dist) in insns
+            with result = 0
+            if (eq dir pos)
+              do (incf result (* (1+ y) (1+ dist)))
+            if (eq dir neg)
+              do (incf result (* (- y) (1+ dist)))
+            if (eq dir #\U)
+              do (incf y dist)
+            if (eq dir #\D)
+              do (decf y dist)
+            if (member dir '(#\R #\L))
+              do (let ((between (1- (abs (- prev-height y))))
+                       (below (1+ (min y prev-height))))
+                   (when (eq dir prev-dir)
+                     (setf result (funcall (if (eq dir pos) #'- #'+) result below)))
+                   (when (eq (if (< y prev-height) prev-dir dir) neg)
+                     (incf result between)))
+              and do (setf prev-dir dir
+                           prev-height y)
+            finally (return result)))))
 
-(defun dir->dir (c)
-  (ecase (char c 0)
-    (#\U #c(0 -1))
-    (#\D #c(0 1))
-    (#\R 1)
-    (#\L -1)))
-
-(loop for line = (read-line *standard-input* nil nil)
-      with c = 0
-      while line
-      for (s-dir dist color) = (str:words line)
-      for dir = (dir->dir s-dir)
-      do (loop for i from 1 to (parse-integer dist)
-               do (setf c (+ c dir)
-                        (gethash c *map*) #\#)))
-
-(defvar *min-x*)
-(defvar *max-x*)
-(defvar *min-y*)
-(defvar *max-y*)
-
-(loop for k being the hash-keys of *map*
-      minimize (realpart k) into minx
-      maximize (realpart k) into maxx
-      minimize (imagpart k) into miny
-      maximize (imagpart k) into maxy
-      finally (setf *min-x* minx
-                    *min-y* miny
-                    *max-x* maxx
-                    *max-y* maxy))
-
-(defun print-map ()
-  (loop for y from *min-y* to *max-y*
-        do (format t "~{~a~}~%"
-                   (loop for x from *min-x* to *max-x*
-                         collect (gethash (complex x y) *map* #\.)))))
-
-;(print-map)
-
-;(format t "~a to ~a, ~a to ~a~%" *min-x* *max-x* *min-y* *max-y*)
-
-(defun try-paint (x y)
-  (loop for point = (complex x y) then (pop points)
-        with visited = (list (complex x y))
-        for new = (loop for d in '(1 -1 #c(0 1) #c(0 -1))
-                        unless (gethash (+ point d) *map*)
-                          collect (+ point d))
-        for points = new then (if new (union new points) points)
-        unless (reduce (lambda (r p)
-                         (and r
-                              (<= *min-x* (realpart p) *max-x*)
-                              (<= *min-y* (imagpart p) *max-y*)))
-                       new
-                       :initial-value t)
-          do (dolist (p visited)
-               (remhash p *map*))
-          and do (return nil)
-        do (setf (gethash point *map*) #\v
-                 visited (append new visited))
-        while points
-        finally (return t)))
-
-(loop with sx = (floor (+ *min-x* *max-x*) 2)
-      for y from *min-y* to *max-y*
-      unless (gethash (complex sx y) *map*)
-        do (if (try-paint sx y)
-               (return)))
-
-;(print-map)
-
-(format t "~a~%" (hash-table-count *map*))
+(format t "~{~a~%~}" (map 'list #'solve *insns*))
