@@ -27,11 +27,13 @@
 
 (defvar *map* (alexandria:copy-array *orig-map*))
 
-(defun fill-map (map start)
+(defun fill-map (map start &optional max-steps)
+  (declare (optimize (speed 3)))
   (setf (aref map (car start) (cdr start)) 0)
   (loop for points = `(,(cons 0 start)) then (append points new-points)
         while points
         for (steps x . y) = (pop points)
+        until (and max-steps (<= max-steps steps))
         for new-points = (loop for d in '((1 0) (-1 0) (0 1) (0 -1))
                                for (nx ny) = (map 'list #'+ `(,x ,y) d)
                                if (and (array-in-bounds-p map ny nx)
@@ -44,9 +46,9 @@
         for value = (row-major-aref map i)
         count (and (not (member value '(#\# #\.)))
                    (<= value steps)
-                   (= 0 (mod (- steps value) 2)))))
+                   (evenp (- steps value)))))
 
-;;; part1
+;; part 1
 (fill-map *map* *start*)
 (format t "~a~%" (count-reached *map* *step-count*))
 
@@ -56,21 +58,15 @@
                        for v = (aref *map* y x)
                        unless (characterp v)
                          maximize v)))
-
 (defparameter *part2-steps* 26501365)
-
 (defparameter *reduced-steps*
-  (let ((mul (max *size-x* *size-y*)))
-    (min *part2-steps*
-         (+ *to-fill-center*
-            (mod (- *part2-steps* *to-fill-center*) mul)))))
-
+  (min *part2-steps*
+       (+ *to-fill-center*
+          (mod (- *part2-steps* *to-fill-center*) (* 2 *size-x*)))))
 (defparameter *starting-radius*
   (ceiling (- *reduced-steps* (floor *size-x* 2)) *size-x*))
-
-(defparameter *ending-radius*
-  (+ *starting-radius* (* 2 4)))
-
+(defparameter *interpolation-iters* 3)
+(defparameter *ending-radius* (+ *starting-radius* (* 2 (1- *interpolation-iters*))))
 (defparameter inflate-radius *ending-radius*)
 
 (defvar *huge-map*
@@ -82,57 +78,32 @@
     (setf (aref *huge-map* y x)
           (aref *orig-map* (mod y *size-y*) (mod x *size-x*)))))
 
-(defun print-map (map &optional steps range &key breaks)
-  (let ((my-steps (or steps (array-total-size map)))
-        (my-range (or range (cons (cons 0 (1- (array-dimension map 1)))
-                                  (cons 0 (1- (array-dimension map 0)))))))
-    (format t "x from ~a to ~a, y from ~a to ~a~%"
-            (caar my-range) (cdar my-range) (cadr my-range) (cddr my-range))
-    (format t "~{~{~a~}~%~}"
-            (loop for y from (cadr my-range) to (cddr my-range)
-                  if (and (cdr breaks) (= 0 (mod y (cdr breaks))))
-                    collect nil
-                  collect (loop for x from (caar my-range) to (cdar my-range)
-                                for v = (aref map y x)
-                                if (and (car breaks) (= 0 (mod x (car breaks))))
-                                  collect #\Space
-                                collect (cond
-                                          ((characterp v) v)
-                                          ((> v my-steps) #\.)
-                                          ((oddp (- my-steps v)) #\_)
-                                          (t #\v)))))))
+(fill-map *huge-map*
+          (cons (+ (car *start*) (* *size-x* inflate-radius))
+                (+ (cdr *start*) (* *size-y* inflate-radius)))
+          (+ *reduced-steps* (* *size-x* (1- *interpolation-iters*) 2)))
 
-(fill-map *huge-map* (cons (+ (car *start*) (* *size-x* inflate-radius))
-                           (+ (cdr *start*) (* *size-y* inflate-radius))))
-
-(defun solve (numbers &optional need-coeffs)
+(defun solve (numbers)
   (loop for ns = numbers then nns
-        for pow from 0
         for nns = (map 'list #'- (cdr ns) ns)
-        sum (car (last ns)) into result
         collect (car ns) into coeffs
         until (apply #'= ns)
-        finally (return (if need-coeffs (reverse coeffs) result))))
+        finally (destructuring-bind (c2 c1 c0) coeffs
+                  (let* ((a (/ c0 2))
+                         (b (- c1 a))
+                         (c c2))
+                    (return `(,c ,b ,a))))))
 
 (defun calc (x coeffs)
   (loop for mul = 1 then (* mul x)
         for coeff in coeffs
         sum (* mul coeff)))
 
-(defparameter *iter-start* 2)
-
-(loop for i from *starting-radius* to *ending-radius*
-      with prediction
+;; part 2
+(loop for i from 0 to (1- *interpolation-iters*)
       with mul = (* 2 *size-x*)
-      for result = (count-reached *huge-map*
-                                  (+ (mod *part2-steps* mul)
-                                     (* mul i)))
+      for result = (count-reached *huge-map* (+ *reduced-steps* (* mul i)))
       collect result into intermediate
-      until (equal prediction result)
-      do (setf prediction (solve intermediate))
-      finally (let ((need (floor *part2-steps* mul)))
-                (destructuring-bind (c0 c1 c2) (solve intermediate t)
-                  (let* ((a (/ c0 2))
-                         (b (- c1 a))
-                         (c c2))
-                    (format t "~a~%"(calc (- need *starting-radius*) `(,c ,b ,a)))))))
+      finally (let ((need (/ (- *part2-steps* *reduced-steps*) mul))
+                    (coeffs (solve intermediate)))
+                (format t "~a~%"(calc need coeffs))))
