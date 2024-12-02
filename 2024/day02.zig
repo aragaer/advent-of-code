@@ -1,29 +1,25 @@
 const std = @import("std");
 
-const info = std.debug.print;
-const Allocator = std.mem.Allocator;
-const List = std.ArrayList(i32);
-const Parser = std.fmt.parseInt;
+const Report = std.ArrayList(i32);
 
-fn get_input(allocator: Allocator) !std.ArrayList(List) {
+fn get_report(allocator: std.mem.Allocator) !Report {
     const reader = std.io.getStdIn().reader();
-    var buffer: [100]u8 = undefined;
-    var result = std.ArrayList(List).init(allocator);
-    while (try reader.readUntilDelimiterOrEof(&buffer, '\n')) |line| {
+    if (reader.readUntilDelimiterOrEofAlloc(allocator, '\n', 100)) |buffer| {
+        const line = buffer orelse return error.Exhausted;
         var words = std.mem.tokenizeAny(u8, line, " \t");
-        var report = List.init(allocator);
+        var report = Report.init(allocator);
         while (words.next()) |word|
-            try report.append(try Parser(i32, word, 10));
-        try result.append(report);
-    }
-    return result;
+            try report.append(try std.fmt.parseInt(i32, word, 10));
+        allocator.free(line);
+        return report;
+    } else |err| return err;
 }
 
-fn is_ok(f: i32, s: i32, asc: bool) bool {
+inline fn is_ok(f: i32, s: i32, asc: bool) bool {
     return (f < s) == asc and f != s and @abs(f - s) < 4;
 }
 
-fn check_report(report: std.ArrayList(i32), skip: i32) usize {
+fn check_report(report: Report, skip: ?usize) !bool {
     const checking = if (skip == 0) report.items[1..] else report.items;
     const asc = if (skip == 1)
         checking[0] < checking[2]
@@ -35,15 +31,15 @@ fn check_report(report: std.ArrayList(i32), skip: i32) usize {
             continue;
         if (is_ok(prev, this, asc))
             prev = this
-        else if (skip == -1) {
-            const bad = @as(i32, @intCast(idx));
-            for (@max(bad - 2, 0)..(idx + 1)) |try_skip|
-                if (check_report(report, @as(i32, @intCast(try_skip))) == 0)
-                    return 1;
-            return 2;
-        } else return 1;
+        else if (skip == null) {
+            const to_try = [3]usize{ 0, idx - 1, idx };
+            for (to_try[(if (idx == 2) 0 else 1)..]) |try_skip|
+                if (try check_report(report, try_skip))
+                    return false;
+            return error.NotSafe;
+        } else return false;
     }
-    return 0;
+    return true;
 }
 
 pub fn main() !void {
@@ -51,21 +47,12 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    const data = try get_input(allocator);
-    defer {
-        for (data.items) |item|
-            item.deinit();
-        data.deinit();
-    }
-
-    var okay: u32 = 0;
-    var fixed: u32 = 0;
-    for (data.items) |report| {
-        switch (check_report(report, -1)) {
-            0 => okay += 1,
-            1 => fixed += 1,
-            else => {},
-        }
-    }
-    info("{}\n{}\n", .{ okay, okay + fixed });
+    var result = [2]usize{ 0, 0 };
+    while (get_report(allocator)) |report| {
+        if (check_report(report, null)) |safe|
+            result[@intFromBool(safe)] += 1
+        else |_| {}
+        report.deinit();
+    } else |_| {}
+    std.debug.print("{}\n{}\n", .{ result[1], result[0] + result[1] });
 }
