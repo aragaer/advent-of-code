@@ -2,54 +2,40 @@ const std = @import("std");
 
 const info = std.debug.print;
 
-fn read_int(data: []u8) !struct { value: u64, len: usize } {
-    var value: u64 = 0;
-    const len = loop: for (data, 0..) |char, idx| {
-        if (std.fmt.charToDigit(char, 10)) |digit|
-            value = value * 10 + digit
-        else |_|
-            break :loop idx;
-    } else 0;
-    if (len > 0)
-        return .{ .value = value, .len = len }
-    else
-        return error.NoDigit;
-}
-
-// inline fn starts_with(data: []u8, start: []u8) {
-//     const len = comptime start.len;
-//     return std.mem.eql(u8, data[0..len], start);
-// }
-
-fn read_mul(data: []u8) struct { value: ?u64, len: usize } {
-    var value: ?u64 = null;
-    var idx: usize = 1;
-    try_read: {
-        if (!std.mem.eql(u8, data[0..4], "mul("))
-            break :try_read;
-        idx = 4;
-        const result1 = read_int(data[idx..]) catch break :try_read;
-        idx += result1.len;
-        if (data[idx] != ',')
-            break :try_read;
-        idx += 1;
-        const result2 = read_int(data[idx..]) catch break :try_read;
-        idx += result2.len;
-        if (data[idx] != ')')
-            break :try_read;
-        idx += 1;
-        value = result1.value * result2.value;
+const Parser = struct {
+    data: []u8,
+    idx: usize = 0,
+    fn string(self: *Parser, str: []const u8) ?void {
+        const len = str.len;
+        if (std.mem.eql(u8, self.data[self.idx .. self.idx + len], str)) {
+            self.idx += len;
+            return;
+        }
+        return null;
     }
-    return .{ .value = value, .len = idx };
-}
-
-fn read_do_dont(data: []u8) struct { value: ?bool, len: usize } {
-    if (std.mem.eql(u8, data[0..4], "do()"))
-        return .{ .value = true, .len = 4 };
-    if (std.mem.eql(u8, data[0..7], "don't()"))
-        return .{ .value = false, .len = 7 };
-    return .{ .value = null, .len = 1 };
-}
+    fn _digit(self: *Parser) ?u8 {
+        if (std.fmt.charToDigit(self.data[self.idx], 10)) |digit| {
+            self.idx += 1;
+            return digit;
+        } else |_| return null;
+    }
+    fn number(self: *Parser) ?u64 {
+        if (self._digit()) |first_digit| {
+            var value: u64 = first_digit;
+            while (self._digit()) |digit|
+                value = value * 10 + digit;
+            return value;
+        }
+        return null;
+    }
+    fn seek(self: *Parser, needles: []const u8) ?u8 {
+        if (std.mem.indexOfAnyPos(u8, self.data, self.idx, needles)) |pos| {
+            self.idx = pos + 1;
+            return self.data[pos];
+        }
+        return null;
+    }
+};
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -65,23 +51,24 @@ pub fn main() !void {
     var part1: u64 = 0;
     var part2: u64 = 0;
     var enabled = true;
-    var idx: usize = 0;
-    while (std.mem.indexOfAnyPos(u8, data.items, idx, "md")) |pos|
-        switch (data.items[pos]) {
+    var parser = Parser{ .data = data.items };
+    while (parser.seek("md")) |found|
+        switch (found) {
             'm' => {
-                const result = read_mul(data.items[pos..]);
-                idx = pos + result.len;
-                if (result.value) |value| {
-                    part1 += value;
-                    if (enabled)
-                        part2 += value;
-                }
+                parser.string("ul(") orelse continue;
+                const num1 = parser.number() orelse continue;
+                parser.string(",") orelse continue;
+                const num2 = parser.number() orelse continue;
+                parser.string(")") orelse continue;
+                part1 += num1 * num2;
+                if (enabled)
+                    part2 += num1 * num2;
             },
             'd' => {
-                const result = read_do_dont(data.items[pos..]);
-                idx = pos + result.len;
-                if (result.value) |value|
-                    enabled = value;
+                if (parser.string("o()")) |_|
+                    enabled = true;
+                if (parser.string("on't()")) |_|
+                    enabled = false;
             },
             else => @panic("should be either m or d only"),
         };
