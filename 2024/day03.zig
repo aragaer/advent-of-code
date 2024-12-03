@@ -6,9 +6,8 @@ const Parser = struct {
     data: []u8,
     idx: usize = 0,
     fn string(self: *Parser, str: []const u8) ?void {
-        const len = str.len;
-        if (std.mem.eql(u8, self.data[self.idx .. self.idx + len], str)) {
-            self.idx += len;
+        if (std.mem.startsWith(u8, self.data[self.idx..], str)) {
+            self.idx += str.len;
             return;
         }
         return null;
@@ -28,10 +27,16 @@ const Parser = struct {
         }
         return null;
     }
-    fn seek(self: *Parser, needles: []const u8) ?u8 {
-        if (std.mem.indexOfAnyPos(u8, self.data, self.idx, needles)) |pos| {
-            self.idx = pos + 1;
-            return self.data[pos];
+    fn search(self: *Parser, comptime needles: []const []const u8) ?[]const u8 {
+        var starts: [needles.len]u8 = undefined;
+        for (needles, 0..) |needle, idx|
+            starts[idx] = needle[0];
+        while (std.mem.indexOfAnyPos(u8, self.data, self.idx, &starts)) |pos| {
+            self.idx = pos;
+            for (needles) |needle|
+                if (self.string(needle)) |_|
+                    return needle;
+            self.idx += 1;
         }
         return null;
     }
@@ -52,10 +57,11 @@ pub fn main() !void {
     var part2: u64 = 0;
     var enabled = true;
     var parser = Parser{ .data = data.items };
-    while (parser.seek("md")) |found|
-        switch (found) {
-            'm' => {
-                parser.string("ul(") orelse continue;
+
+    const Pattern = enum { @"mul(", @"do()", @"don't()" };
+    while (parser.search(std.meta.fieldNames(Pattern))) |found|
+        switch (std.meta.stringToEnum(Pattern, found).?) {
+            .@"mul(" => {
                 const num1 = parser.number() orelse continue;
                 parser.string(",") orelse continue;
                 const num2 = parser.number() orelse continue;
@@ -64,13 +70,8 @@ pub fn main() !void {
                 if (enabled)
                     part2 += num1 * num2;
             },
-            'd' => {
-                if (parser.string("o()")) |_|
-                    enabled = true;
-                if (parser.string("on't()")) |_|
-                    enabled = false;
-            },
-            else => @panic("should be either m or d only"),
+            .@"do()" => enabled = true,
+            .@"don't()" => enabled = false,
         };
     info("{}\n{}\n", .{ part1, part2 });
 }
