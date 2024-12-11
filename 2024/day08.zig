@@ -54,6 +54,8 @@ pub fn main() !void {
                 if (first.re == second.re and first.im == second.im)
                     continue;
                 const diff = first.sub(second);
+                if (@mod(diff.re, 3) == 0 and @mod(diff.im, 3) == 0)
+                    info("possibly an antinode between {} and {}\n", .{ first, second });
                 var anti = first;
                 while (in_bounds(anti.re, anti.im)) : (anti = anti.add(diff))
                     try antinodes.put(anti, antinodes.get(anti) orelse 0);
