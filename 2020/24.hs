@@ -1,4 +1,3 @@
-import Data.Function
 import qualified Data.Map.Strict as M
 import qualified Data.Set as S
 import Text.ParserCombinators.Parsec
@@ -10,8 +9,8 @@ parseInput = either (error . show) id . parse inputData ""
        ew :: Int -> Int -> GenParser Char st (Int,Int)
        ew i j =   do {char 'e'; pure (i,j)}
               <|> do {char 'w'; pure ((-i),j)}
-       north = char 'n' >> ew 1 2
-       south = char 's' >> ew 1 (-2)
+       north = char 'n' >> ew 1 1
+       south = char 's' >> ew 1 (-1)
 
 step :: S.Set (Int,Int) -> S.Set (Int,Int)
 step living = living `S.union` born S.\\ dead
@@ -22,12 +21,11 @@ step living = living `S.union` born S.\\ dead
     countLivingNeighbours = S.size . S.intersection living . neighbours
 
 neighbours :: (Int,Int) -> S.Set (Int,Int)
-neighbours (i,j) = S.fromList [(i+2,j),(i+1,j+2),(i-1,j+2),(i-2,j),(i-1,j-2),(i+1,j-2)]
+neighbours (i,j) = S.fromList [(i+2,j),(i+1,j+1),(i-1,j+1),(i-2,j),(i-1,j-1),(i+1,j-1)]
 
 initialMap input = M.keysSet . M.filter id $ foldl flipTile M.empty input
 
 part1 = S.size
-
 part2 = go 100
   where go 0 = S.size
         go x = go (x-1) . step

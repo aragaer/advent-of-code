@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 import qualified Data.Map as Map
 import Data.Bits
 import Text.ParserCombinators.Parsec
@@ -29,17 +30,12 @@ parseProg :: GenParser Char st [Op]
 parseProg = command `sepEndBy` char '\n'
   where
     command = do
-      char 'm'
-      mask <|> store
-    mask = do
-      string "ask = "
-      Mask <$> many1 alphaNum
-    store = do
-      string "em["
-      addr <- read <$> many1 digit
-      string "] = "
-      value <- read <$> many1 digit
-      pure $ Store addr value
+      many1 letter >>= \case
+        "mask" -> eq >> Mask <$> many1 alphaNum
+        "mem"  -> do
+          addr <- read <$> between (char '[') (char ']') (many1 digit)
+          eq >> Store addr <$> read <$> many1 digit
+    eq = between space space (char '=')
 
 part2 = go Map.empty default_mask
   where

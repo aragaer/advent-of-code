@@ -60,6 +60,7 @@ main(Args) ->
     Y = search([{26,0,[]}],maps:new(),Connectivity,Valves),
     {Res2,A21,A22} = lists:max([{V1+V2,A1,A2} || {K1,{V1,A1}} <- maps:to_list(Y),
                                                  {K2,{V2,A2}} <- maps:to_list(Y),
+                                                 K1 > K2,
                                                  K1 -- K2 == K1]),
     io:format("~p", [Res2]),
     if Args == [] -> io:format("~n");

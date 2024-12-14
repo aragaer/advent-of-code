@@ -55,7 +55,7 @@
         for my-range = range then fail
         for (pass fail) = (if cond
                               (process-range my-range cond)
-                              (list my-range))
+                              `(,my-range))
         if pass
           collect (cons target pass)
         while fail))

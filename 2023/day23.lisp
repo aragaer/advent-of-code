@@ -60,38 +60,39 @@
 (defparameter *graph* nil)
 (defparameter *slopes* nil)
 
+(defun simplify1 (graph)
+  "Remove dead-ends and squash pass-throughs -- single pass"
+  (loop for point being the hash-keys of graph using (hash-value neighs)
+        for is-slope-p = (member point *slopes*)
+        if (and is-slope-p (not neighs))
+          do (loop for neigh being the hash-keys of graph using (hash-value nn)
+                   for points-here = (assoc point nn)
+                   if points-here
+                     do (delete point (gethash neigh graph) :key #'car))
+          and collect point
+        if (and (not is-slope-p)
+                (= (length neighs) 1)
+                (not (member point `(,*start* ,*end*))))
+          do (delete point (gethash (caar neighs) graph) :key #'car)
+          and collect point
+        if (= (length neighs) 2)
+          do (destructuring-bind ((pt1 . d1) (pt2 . d2)) neighs
+               (let ((n1 (gethash pt1 graph))
+                     (n2 (gethash pt2 graph)))
+                 (when (assoc point n1)
+                   (setf (gethash pt1 graph)
+                         (cons (cons pt2 (+ d1 d2))
+                               (remove point n1 :key #'car))))
+                 (when (assoc point n2)
+                   (setf (gethash pt2 graph)
+                         (cons (cons pt1 (+ d1 d2))
+                               (remove point n2 :key #'car))))))
+          and collect point))
+
 (defun simplify (graph)
-  "Remove dead-ends and squash pass-throughs"
-  (loop for deleted = nil
-        do (loop for point being the hash-keys of graph using (hash-value neighs)
-                 for is-slope-p = (member point *slopes*)
-                 if (and is-slope-p (not neighs))
-                   do (loop for neigh being the hash-keys of graph using (hash-value nn)
-                            for points-here = (assoc point nn)
-                            if points-here
-                              do (delete point (gethash neigh graph) :key #'car))
-                   and do (remhash point graph)
-                   and do (push point deleted)
-                 if (and (not is-slope-p)
-                         (= (length neighs) 1)
-                         (not (member point `(,*start* ,*end*))))
-                   do (delete point (gethash (caar neighs) graph) :key #'car)
-                   and do (remhash point graph)
-                   and do (push point deleted)
-                 if (= (length neighs) 2)
-                   do (destructuring-bind ((pt1 . d1) (pt2 . d2)) neighs
-                        (let ((n1 (gethash pt1 graph))
-                              (n2 (gethash pt2 graph)))
-                          (when (assoc point n1)
-                            (setf (gethash pt1 graph)
-                                  (cons (cons pt2 (+ d1 d2))
-                                        (remove point n1 :key #'car))))
-                          (when (assoc point n2)
-                            (setf (gethash pt2 graph)
-                                  (cons (cons pt1 (+ d1 d2))
-                                        (remove point n2 :key #'car))))))
-                   and do (remhash point graph)
-                   and do (push point deleted))
+  (loop for deleted = (simplify1 graph)
+        do (dolist (d deleted)
+             (remhash d graph))
         while deleted))
 
 (defun max-path (visited dont-fix-dead-ends)
@@ -112,4 +113,6 @@
   (simplify *graph*)
   (max-path `(,*start*) dont-fix-dead-ends))
 
-(format t "~a~%~a~%" (solve) (solve 'ignore-slopes))
+(format t "~a (~a)~%~a (~a)~%"
+        (solve) (solve nil 'wrogn)
+        (solve 'ignore-slopes) (solve 'ignore-slopes 'wrogn))

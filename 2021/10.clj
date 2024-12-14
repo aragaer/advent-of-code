@@ -17,16 +17,18 @@
    \> 4})
 
 (defn process-line [line & open]
-  (cond
-    (empty? line) open
-    (= (first open) (first line)) (recur (rest line) (rest open))
-    (contains? legal (first line)) (recur (rest line) (apply list (get legal (first line)) open))
-    :else (first line)))
+  (if (empty? line)
+    open
+    (let [c (first line)]
+      (cond
+        (= (first open) c) (recur (rest line) (rest open))
+        (contains? legal c) (recur (rest line) (conj open (get legal c)))
+        :else c))))
 
 (let [lines (map seq (line-seq (java.io.BufferedReader. *in*)))
       processed (map process-line lines)
-      corrupted (remove seq? processed)
-      incomplete (filter seq? processed)]
+      {corrupted false
+       incomplete true} (group-by seq? processed)]
   (->> corrupted
        (map corrupt-costs)
        (reduce +)

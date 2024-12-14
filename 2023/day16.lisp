@@ -9,61 +9,69 @@
   (loop for line = (read-line *standard-input* nil nil)
         while line
         collect line into lines
-        finally (return (make-array `(,(length lines) ,(length (car lines)))
+        finally (return (make-array `(,(length (car lines)) ,(length lines))
                                     :initial-contents lines))))
 
+(defvar *exits*)
 (defvar *seen*)
 
 (defun reset-state ()
-  (setf *seen* (make-hash-table :test #'equal)))
+  (setf *seen* (make-hash-table)
+        *exits* nil))
 
 (reset-state)
 
-(defun mirror (direction mirror)
-  (ecase mirror
-    (#\\ (cons (cdr direction) (car direction)))
-    (#\/ (cons (- (cdr direction)) (- (car direction))))))
-
-(defun move (pos direction)
-  (destructuring-bind (y . x) pos
-    (cons (+ y (car direction)) (+ x (cdr direction)))))
+(defun mirror1 (dir) (complex (imagpart dir) (realpart dir)))
+(defun mirror2 (dir) (mirror1 (- dir)))
+(defun move (pos dir) (+ pos dir))
 
 (defun split (direction mirror pos)
   (or
    (ecase mirror
-     (#\- (if (= 0 (cdr direction))
-              (prog1 '(0 . 1)
-                (energize (move pos '(0 . -1)) '(0 . -1)))))
-     (#\| (if (= 0 (car direction))
-              (prog1 '(1 . 0)
-                (energize (move pos '(-1 . 0)) '(-1 . 0))))))
+     (#\- (when (complexp direction)
+            (energize (move pos -1) -1)
+            1))
+     (#\| (unless (complexp direction)
+            (energize (move pos #c(0 -1)) #c(0 -1))
+            #c(0 1))))
    direction))
 
+(defvar *cache* (make-hash-table :test #'equal))
+
 (defun energize (pos direction)
-  (loop while (array-in-bounds-p *data* (car pos) (cdr pos))
-        for here = (aref *data* (car pos) (cdr pos))
-        until (member direction (gethash pos *seen*) :test #'equal)
+  (loop for x = (realpart pos)
+        for y = (imagpart pos)
+        while (array-in-bounds-p *data* y x)
+        until (member direction (gethash pos *seen*))
+        for here = (aref *data* y x)
         do (push direction (gethash pos *seen*))
         do (ecase here
              (#\.) ;; do nothing
-             ((#\\ #\/) (setf direction (mirror direction here)))
+             (#\\ (setf direction (mirror1 direction)))
+             (#\/ (setf direction (mirror2 direction)))
              ((#\| #\-) (setf direction (split direction here pos))))
-        do (setf pos (move pos direction))))
+        do (setf pos (move pos direction))
+        finally (unless (array-in-bounds-p *data* y x)
+                  (push (cons (move pos (- direction)) (- direction)) *exits*))))
 
 (defun experiment (pos direction)
-  (reset-state)
-  (energize pos direction)
-  (hash-table-count *seen*))
+  (or (gethash (cons pos direction) *cache*)
+      (progn
+        (reset-state)
+        (energize pos direction)
+        (let ((result (hash-table-count *seen*)))
+          (dolist (key *exits* result)
+            (setf (gethash key *cache*) result))))))
 
-(format t "~a~%" (experiment '(0 . 0) '(0 . 1)))
+(format t "~a~%" (experiment 0 1))
 
-(let ((starts (destructuring-bind (size-y size-x) (array-dimensions *data*)
+(let ((starts (destructuring-bind (size-x size-y) (array-dimensions *data*)
                 (append (loop for y from 0 to (- size-y 1)
-                              collect `(,(cons y 0) (0 . 1))
-                              collect `(,(cons y (- size-x 1)) (0 . -1)))
+                              collect `(,(complex 0 y) 1)
+                              collect `(,(complex (- size-x 1) y) -1))
                         (loop for x from 0 to (- size-x 1)
-                              collect `(,(cons 0 x) (1 . 0))
-                              collect `(,(cons (- size-y 1) x) (-1 . 0)))))))
+                              collect `(,x #c(0 1))
+                              collect `(,(complex x (- size-y 1)) #c(0 -1)))))))
   (loop for (pos dir) in starts
         maximize (experiment pos dir) into result2
         finally (format t "~a~%" result2)))

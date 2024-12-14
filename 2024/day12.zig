@@ -67,6 +67,7 @@ fn fill(here: Coord, crop: u8, allocator: std.mem.Allocator) ![2]usize {
     var walls = std.AutoHashMap(Wall, void).init(allocator);
     defer walls.deinit();
     var region_area: usize = 0;
+    var corners: usize = 0;
     while (queue.popOrNull()) |location| {
         if (get(location) != crop)
             continue;
@@ -118,6 +119,8 @@ pub fn main() !void {
     for (area.items, 0..) |line, y|
         for (line, 0..) |crop, x| {
             if (crop < 128) {
+                if (crop == '\r')
+                    continue;
                 const result = try fill(c(x, y), crop, allocator);
                 part1 += result[0];
                 part2 += result[1];

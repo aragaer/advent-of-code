@@ -26,9 +26,11 @@
          incompletes (repeat (count boards) true)]
     (let [number (first numbers)
           boards (map #(map #(replace {number nil} %) %) boards)
-          nil-boards (map (fn [board]
-                            (every? false? (map #(every? nil? %) board))) boards)
-          new-winners (map #(not (= %1 %2)) incompletes nil-boards)
+          nil-boards (for [board boards]
+                       (->> board
+                            (map #(every? nil? %))
+                            (every? false?)))
+          new-winners (map not= incompletes nil-boards)
           winner-count (count (filter false? nil-boards))]
       (when number
         (when (and (not (every? false? new-winners))

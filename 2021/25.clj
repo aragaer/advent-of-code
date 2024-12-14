@@ -1,4 +1,4 @@
-#!/usr/bin/env bb
+#!/usr/bin/env -S bb -i
 
 (defn change-sets [keys-set vals-set change-map]
   (let [inv (zipmap (vals change-map) (keys change-map))]
@@ -14,7 +14,7 @@
     [(+ (count can-move-east) (count can-move-south))
      (assoc state :e e :f f :s s)]))
 
-(let [data (mapv vec (line-seq (java.io.BufferedReader. *in*)))
+(let [data (mapv vec *input*)
       width (count (first data))
       height (count data)
       {south \v

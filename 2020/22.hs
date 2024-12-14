@@ -1,7 +1,6 @@
 {-# LANGUAGE LambdaCase, TypeSynonymInstances, FlexibleInstances, TupleSections #-}
 import Control.Monad.State
 import Data.Either
-import Data.Function
 import Data.Set (Set,member,insert,empty)
 import Text.ParserCombinators.Parsec (many1,digit,manyTill,sepEndBy,string,char,parse)
 

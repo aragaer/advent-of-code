@@ -26,8 +26,8 @@ rule :: GenParser Char st Rule
 rule = do
   field <- anyChar `manyTill` char ':'
   space
-  ranges <- concat <$> range `sepBy` string " or "
-  pure (field,ranges)
+  valid <- concat <$> range `sepBy` string " or "
+  pure (field,valid)
   where range = do
           s <- number
           char '-'
