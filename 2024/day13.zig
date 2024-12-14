@@ -1,8 +1,7 @@
 const std = @import("std");
 
 const info = std.debug.print;
-const T = usize;
-const Params = [6]T;
+const Coord = std.math.Complex(i32);
 
 fn read() !?Params {
     var buf: [100]u8 = undefined;
@@ -18,7 +17,7 @@ fn read() !?Params {
     return data;
 }
 
-fn solve(params: Params) !?[2]T {
+fn solve(params: Params) !?T {
     const lcq = params[0] * params[1] / std.math.gcd(params[0], params[1]);
     const t1 = lcq / params[0];
     const t2 = lcq / params[1];
@@ -35,7 +34,7 @@ fn solve(params: Params) !?[2]T {
     if (@mod(p, b) == 0) {
         const snd = @divTrunc(p, b);
         const fst = @divTrunc(params[4] - params[2] * snd, params[0]);
-        return [2]T{ fst, snd };
+        return fst * 3 + snd;
     }
     return null;
 }
@@ -44,15 +43,11 @@ pub fn main() !void {
     var part1: T = 0;
     var part2: T = 0;
     while (try read()) |params| {
-        if (try solve(params)) |result| {
-            if (result[0] <= 100 and result[1] <= 100)
-                part1 += result[0] * 3 + result[1];
-        }
+        part1 += try solve(params) orelse 0;
         var p2 = params;
         p2[4] += 10000000000000;
         p2[5] += 10000000000000;
-        if (try solve(p2)) |result|
-            part2 += result[0] * 3 + result[1];
+        part2 += try solve(p2) orelse 0;
         _ = std.io.getStdIn().reader().readByte() catch break; // read empty line
     }
     info("{}\n{}\n", .{ part1, part2 });
