@@ -5,10 +5,48 @@ const T = i32;
 const Coord = std.math.Complex(T);
 const Pt = struct { pos: Coord, dir: Coord };
 
+fn Queue(comptime Child: type, comptime Threshold: usize) type {
+    return struct {
+        const This = @This();
+        idx: usize,
+        inner: std.ArrayList(Child),
+
+        pub fn init(allocator: std.mem.Allocator) This {
+            return This{
+                .idx = 0,
+                .inner = std.ArrayList(Child).init(allocator),
+            };
+        }
+        pub fn deinit(this: *This) void {
+            this.inner.deinit();
+        }
+        pub fn append(this: *This, item: Child) !void {
+            return this.inner.append(item);
+        }
+        pub fn pop(this: *This) ?Child {
+            var result: ?Child = null;
+            if (this.idx < this.inner.items.len) {
+                result = this.inner.items[this.idx];
+                this.idx += 1;
+            }
+            const left = this.inner.items.len - this.idx;
+            if (left < Threshold) {
+                this.inner.replaceRangeAssumeCapacity(0, left, this.inner.items[this.idx..]);
+                this.inner.shrinkRetainingCapacity(left);
+                this.idx = 0;
+            }
+            return result;
+        }
+        pub fn getLast(this: *This) Child {
+            return this.inner.getLast();
+        }
+    };
+}
+
 var area: std.ArrayList([]bool) = undefined;
 var seen: std.AutoHashMap(Pt, usize) = undefined;
 var best: std.AutoHashMap(Coord, void) = undefined;
-var queue: std.ArrayList(Pt) = undefined;
+var queue: Queue(Pt, 10) = undefined;
 var width: usize = undefined;
 var height: usize = undefined;
 
@@ -86,7 +124,7 @@ pub fn main() !void {
     const DirCost = struct { Coord, usize };
     const dir_costs = [_]DirCost{ DirCost{ c(1, 0), 1 }, DirCost{ c(0, 1), 1001 }, DirCost{ c(0, -1), 1001 } };
 
-    while (queue.popOrNull()) |pt| {
+    while (queue.pop()) |pt| {
         if (get(pt.pos) != false)
             continue;
         const cost = seen.get(pt).?;
@@ -118,7 +156,7 @@ pub fn main() !void {
     }
 
     try best.put(finish, void{});
-    while (queue.popOrNull()) |pt| {
+    while (queue.pop()) |pt| {
         const cost = seen.get(pt).?;
         for (dir_costs) |dc| {
             const nd = pt.dir.mul(dc[0]);
