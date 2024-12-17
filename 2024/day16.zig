@@ -30,7 +30,7 @@ fn Queue(comptime Child: type, comptime Threshold: usize) type {
                 this.idx += 1;
             }
             const left = this.inner.items.len - this.idx;
-            if (left < Threshold) {
+            if (left < Threshold and idx >= left) {
                 this.inner.replaceRangeAssumeCapacity(0, left, this.inner.items[this.idx..]);
                 this.inner.shrinkRetainingCapacity(left);
                 this.idx = 0;
