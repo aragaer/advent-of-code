@@ -68,24 +68,21 @@ pub fn main() !void {
         info(",{}", .{out});
     info("\n", .{});
 
-    var queue = std.ArrayList(Reg).init(allocator);
+    var queue = std.ArrayList(struct { Reg, usize }).init(allocator);
     defer queue.deinit();
-    var next = std.ArrayList(Reg).init(allocator);
-    defer next.deinit();
 
-    try queue.append(0);
-    for (0..insns.items.len) |offt| {
-        for (queue.items) |i|
-            inline for (0..8) |v| {
-                const nv = i << 3 | v;
-                regs[0] = nv;
-                ptr = 0;
-                if (run() == insns.items[insns.items.len - offt - 1])
-                    try next.append(nv);
-            };
-        queue.clearRetainingCapacity();
-        try queue.insertSlice(0, next.items);
-        next.clearRetainingCapacity();
+    try queue.append(.{ 0, 1 });
+    outer: while (queue.popOrNull()) |i| {
+        inline for (0..8) |v| {
+            const nv = i[0] << 3 | (7 - v);
+            regs[0] = nv;
+            ptr = 0;
+            if (run() == insns.items[insns.items.len - i[1]]) {
+                try queue.append(.{ nv, i[1] + 1 });
+                if (i[1] == insns.items.len)
+                    break :outer;
+            }
+        }
     }
-    info("{}\n", .{queue.items[0]});
+    info("{}\n", .{queue.pop()[0]});
 }
