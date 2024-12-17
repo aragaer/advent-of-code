@@ -75,7 +75,7 @@ pub fn main() !void {
 
     try queue.append(0);
     for (0..insns.items.len) |offt| {
-        while (queue.popOrNull()) |i|
+        for (queue.items) |i|
             inline for (0..8) |v| {
                 const nv = i << 3 | v;
                 regs[0] = nv;
@@ -83,6 +83,7 @@ pub fn main() !void {
                 if (run() == insns.items[insns.items.len - offt - 1])
                     try next.append(nv);
             };
+        queue.clearRetainingCapacity();
         try queue.insertSlice(0, next.items);
         next.clearRetainingCapacity();
     }
