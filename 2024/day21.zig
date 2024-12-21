@@ -1,0 +1,225 @@
+const std = @import("std");
+
+const info = std.debug.print;
+
+const numpad: [4][]const u8 = .{ "789", "456", "123", " 0A" };
+const dirpad: [2][]const u8 = .{ " ^B", "<v>" };
+
+var coords: std.AutoHashMap(u8, [2]usize) = undefined;
+
+fn fill(pad: []const []const u8) !void {
+    for (pad, 0..) |line, y| {
+        for (line, 0..) |char, x|
+            try coords.put(char, .{ y, x });
+    }
+}
+
+const Cache = std.AutoHashMap([2]u8, []u8);
+const Layer = struct {
+    idx: usize,
+    cache: Cache,
+    prev: ?*Layer,
+
+    const This = @This();
+
+    fn one_move(self: *This, f: u8, s: u8, is_dirpad: bool) []u8 {
+        const a = self.cache.allocator;
+        const key: [2]u8 = .{ f, s };
+        const res = self.cache.getOrPut(key) catch @panic("mem");
+        if (res.found_existing)
+            return res.value_ptr.*;
+
+        const p1 = coords.get(f).?;
+        const p2 = coords.get(s).?;
+
+        var buf = std.ArrayList(u8).init(a);
+        defer buf.deinit();
+
+        move(p1, p2, &buf);
+
+        if (self.prev == null) {
+            const result = a.dupe(u8, buf.items) catch @panic("mem");
+            res.value_ptr.* = result;
+            return result;
+        }
+
+        const p = self.prev.?;
+        const butlast = buf.items[0..(buf.items.len - 1)];
+        var best: ?[]u8 = null;
+        const result = permute(a, butlast);
+        defer a.free(result);
+        for (result) |perm| {
+            defer a.free(perm);
+            if (!check(p1, perm, is_dirpad))
+                continue;
+            const m = a.alloc(u8, buf.items.len) catch @panic("mem");
+            defer a.free(m);
+            @memcpy(m[0..butlast.len], perm);
+            m[butlast.len] = 'B';
+            const attempt = p.compute(m, true);
+            if (best) |best_so_far| {
+                if (attempt.len < best_so_far.len) {
+                    a.free(best.?);
+                    best = attempt;
+                } else a.free(attempt);
+            } else {
+                best = attempt;
+            }
+        }
+        res.value_ptr.* = best.?;
+        return best.?;
+    }
+
+    fn compute(self: *This, code: []const u8, is_dirpad: bool) []u8 {
+        const allocator = self.cache.allocator;
+        var buf = std.ArrayList(u8).init(allocator);
+        defer buf.deinit();
+
+        var f: u8 = if (is_dirpad) 'B' else 'A';
+        for (code) |s| {
+            const res = self.one_move(f, s, is_dirpad);
+            buf.appendSlice(res) catch @panic("mem");
+            f = s;
+        }
+
+        return (allocator.dupe(u8, buf.items) catch @panic("mem"));
+    }
+
+    fn init(allocator: std.mem.Allocator, idx: usize, prev: ?*Layer) !Layer {
+        const cache = Cache.init(allocator);
+        return Layer{ .idx = idx, .cache = cache, .prev = prev };
+    }
+
+    fn deinit(self: *This) void {
+        var iter = self.cache.iterator();
+        while (iter.next()) |entry|
+            self.cache.allocator.free(entry.value_ptr.*);
+        self.cache.deinit();
+    }
+};
+
+fn permute(allocator: std.mem.Allocator, data: []const u8) [][]u8 {
+    var perms = std.ArrayList([]u8).init(allocator);
+    defer perms.deinit();
+    if (data.len == 0) {
+        const empty = allocator.alloc(u8, 0) catch @panic("mem");
+        perms.append(empty) catch @panic("mem");
+    } else {
+        for (data, 0..) |item, idx| {
+            const without = allocator.alloc(u8, data.len - 1) catch @panic("mem");
+            defer allocator.free(without);
+            @memcpy(without[0..idx], data[0..idx]);
+            @memcpy(without[idx..], data[(idx + 1)..]);
+            const result = permute(allocator, without);
+            defer allocator.free(result);
+            for (result) |piece| {
+                defer allocator.free(piece);
+                const new = allocator.alloc(u8, data.len) catch @panic("mem");
+                new[0] = item;
+                @memcpy(new[1..], piece);
+                perms.append(new) catch @panic("mem");
+            }
+        }
+    }
+    return (allocator.dupe([]u8, perms.items) catch @panic("mem"));
+}
+
+fn move(f: [2]usize, t: [2]usize, buf: *std.ArrayList(u8)) void {
+    var x = f[1];
+    var y = f[0];
+    while (x < t[1]) : (x += 1)
+        buf.append('>') catch @panic("mem");
+    while (y > t[0]) : (y -= 1)
+        buf.append('^') catch @panic("mem");
+    while (x > t[1]) : (x -= 1)
+        buf.append('<') catch @panic("mem");
+    while (y < t[0]) : (y += 1)
+        buf.append('v') catch @panic("mem");
+    buf.append('B') catch @panic("mem");
+}
+
+fn run(allocator: std.mem.Allocator, moves: []const u8, is_dirpad: bool) []u8 {
+    var buf = std.ArrayList(u8).init(allocator);
+    defer buf.deinit();
+
+    const pos = coords.get(if (is_dirpad) 'B' else 'A').?;
+    var x = pos[1];
+    var y = pos[0];
+    for (moves) |m| {
+        switch (m) {
+            '<' => x -= 1,
+            '>' => x += 1,
+            '^' => y -= 1,
+            'v' => y += 1,
+            'B' => {
+                const c = if (is_dirpad) dirpad[y][x] else numpad[y][x];
+                buf.append(c) catch @panic("mem");
+            },
+            else => unreachable,
+        }
+    }
+
+    return (allocator.dupe(u8, buf.items) catch @panic("mem"));
+}
+
+fn check(p: [2]usize, moves: []const u8, is_dirpad: bool) bool {
+    var x = p[1];
+    var y = p[0];
+    for (moves) |m| {
+        switch (m) {
+            '<' => x -= 1,
+            '>' => x += 1,
+            '^' => y -= 1,
+            'v' => y += 1,
+            else => {},
+        }
+        if (is_dirpad) {
+            if (dirpad[y][x] == ' ')
+                return false;
+        } else {
+            if (numpad[y][x] == ' ')
+                return false;
+        }
+    }
+    return true;
+}
+
+pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+
+    coords = @TypeOf(coords).init(allocator);
+    defer coords.deinit();
+
+    var layers = try allocator.alloc(Layer, 26);
+    defer {
+        for (layers) |*layer|
+            layer.deinit();
+        allocator.free(layers);
+    }
+
+    try fill(&numpad);
+    try fill(&dirpad);
+
+    for (0..layers.len) |idx| {
+        const prev = if (idx == 0) null else &layers[idx - 1];
+        layers[idx] = try Layer.init(allocator, idx, prev);
+    }
+
+    var part1: usize = 0;
+    var buf: [200]u8 = undefined;
+    const reader = std.io.getStdIn().reader();
+    while (try reader.readUntilDelimiterOrEof(&buf, '\n')) |line| {
+        const n = try std.fmt.parseInt(usize, line[0..(line.len - 1)], 10);
+        // info("{s} {}\n", .{ line, n });
+        const res1 = layers[2].compute(line, false);
+        defer allocator.free(res1);
+        //const res2 = layers[25].compute(line, false);
+        //defer allocator.free(res2);
+
+        part1 += n * res1.len;
+    }
+
+    info("{}\n", .{part1});
+}
