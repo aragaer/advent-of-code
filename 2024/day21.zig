@@ -14,15 +14,14 @@ fn fill(pad: []const []const u8) !void {
     }
 }
 
-const Cache = std.AutoHashMap([2]u8, []u8);
+const Cache = std.AutoHashMap([2]u8, usize);
 const Layer = struct {
-    idx: usize,
     cache: Cache,
     prev: ?*Layer,
 
     const This = @This();
 
-    fn one_move(self: *This, f: u8, s: u8, is_dirpad: bool) []u8 {
+    fn one_move(self: *This, f: u8, s: u8, is_dirpad: bool) usize {
         const a = self.cache.allocator;
         const key: [2]u8 = .{ f, s };
         const res = self.cache.getOrPut(key) catch @panic("mem");
@@ -35,17 +34,17 @@ const Layer = struct {
         var buf = std.ArrayList(u8).init(a);
         defer buf.deinit();
 
-        move(p1, p2, &buf);
+        move(p1, p2, &buf) catch @panic("mem");
 
         if (self.prev == null) {
-            const result = a.dupe(u8, buf.items) catch @panic("mem");
+            const result = buf.items.len;
             res.value_ptr.* = result;
             return result;
         }
 
         const p = self.prev.?;
         const butlast = buf.items[0..(buf.items.len - 1)];
-        var best: ?[]u8 = null;
+        var best: ?usize = null;
         const result = permute(a, butlast);
         defer a.free(result);
         for (result) |perm| {
@@ -58,10 +57,8 @@ const Layer = struct {
             m[butlast.len] = 'B';
             const attempt = p.compute(m, true);
             if (best) |best_so_far| {
-                if (attempt.len < best_so_far.len) {
-                    a.free(best.?);
+                if (attempt < best_so_far)
                     best = attempt;
-                } else a.free(attempt);
             } else {
                 best = attempt;
             }
@@ -70,30 +67,21 @@ const Layer = struct {
         return best.?;
     }
 
-    fn compute(self: *This, code: []const u8, is_dirpad: bool) []u8 {
-        const allocator = self.cache.allocator;
-        var buf = std.ArrayList(u8).init(allocator);
-        defer buf.deinit();
-
+    fn compute(self: *This, code: []const u8, is_dirpad: bool) usize {
+        var result: usize = 0;
         var f: u8 = if (is_dirpad) 'B' else 'A';
         for (code) |s| {
-            const res = self.one_move(f, s, is_dirpad);
-            buf.appendSlice(res) catch @panic("mem");
+            result += self.one_move(f, s, is_dirpad);
             f = s;
         }
-
-        return (allocator.dupe(u8, buf.items) catch @panic("mem"));
+        return result;
     }
 
-    fn init(allocator: std.mem.Allocator, idx: usize, prev: ?*Layer) !Layer {
-        const cache = Cache.init(allocator);
-        return Layer{ .idx = idx, .cache = cache, .prev = prev };
+    fn init(allocator: std.mem.Allocator, prev: ?*Layer) !Layer {
+        return Layer{ .cache = Cache.init(allocator), .prev = prev };
     }
 
     fn deinit(self: *This) void {
-        var iter = self.cache.iterator();
-        while (iter.next()) |entry|
-            self.cache.allocator.free(entry.value_ptr.*);
         self.cache.deinit();
     }
 };
@@ -124,42 +112,18 @@ fn permute(allocator: std.mem.Allocator, data: []const u8) [][]u8 {
     return (allocator.dupe([]u8, perms.items) catch @panic("mem"));
 }
 
-fn move(f: [2]usize, t: [2]usize, buf: *std.ArrayList(u8)) void {
+fn move(f: [2]usize, t: [2]usize, buf: *std.ArrayList(u8)) !void {
     var x = f[1];
     var y = f[0];
     while (x < t[1]) : (x += 1)
-        buf.append('>') catch @panic("mem");
+        try buf.append('>');
     while (y > t[0]) : (y -= 1)
-        buf.append('^') catch @panic("mem");
+        try buf.append('^');
     while (x > t[1]) : (x -= 1)
-        buf.append('<') catch @panic("mem");
+        try buf.append('<');
     while (y < t[0]) : (y += 1)
-        buf.append('v') catch @panic("mem");
-    buf.append('B') catch @panic("mem");
-}
-
-fn run(allocator: std.mem.Allocator, moves: []const u8, is_dirpad: bool) []u8 {
-    var buf = std.ArrayList(u8).init(allocator);
-    defer buf.deinit();
-
-    const pos = coords.get(if (is_dirpad) 'B' else 'A').?;
-    var x = pos[1];
-    var y = pos[0];
-    for (moves) |m| {
-        switch (m) {
-            '<' => x -= 1,
-            '>' => x += 1,
-            '^' => y -= 1,
-            'v' => y += 1,
-            'B' => {
-                const c = if (is_dirpad) dirpad[y][x] else numpad[y][x];
-                buf.append(c) catch @panic("mem");
-            },
-            else => unreachable,
-        }
-    }
-
-    return (allocator.dupe(u8, buf.items) catch @panic("mem"));
+        try buf.append('v');
+    try buf.append('B');
 }
 
 fn check(p: [2]usize, moves: []const u8, is_dirpad: bool) bool {
@@ -173,13 +137,11 @@ fn check(p: [2]usize, moves: []const u8, is_dirpad: bool) bool {
             'v' => y += 1,
             else => {},
         }
-        if (is_dirpad) {
-            if (dirpad[y][x] == ' ')
-                return false;
-        } else {
-            if (numpad[y][x] == ' ')
-                return false;
-        }
+        if ((if (is_dirpad)
+            dirpad[y][x]
+        else
+            numpad[y][x]) == ' ')
+            return false;
     }
     return true;
 }
@@ -204,22 +166,18 @@ pub fn main() !void {
 
     for (0..layers.len) |idx| {
         const prev = if (idx == 0) null else &layers[idx - 1];
-        layers[idx] = try Layer.init(allocator, idx, prev);
+        layers[idx] = try Layer.init(allocator, prev);
     }
 
     var part1: usize = 0;
+    var part2: usize = 0;
     var buf: [200]u8 = undefined;
     const reader = std.io.getStdIn().reader();
     while (try reader.readUntilDelimiterOrEof(&buf, '\n')) |line| {
         const n = try std.fmt.parseInt(usize, line[0..(line.len - 1)], 10);
-        // info("{s} {}\n", .{ line, n });
-        const res1 = layers[2].compute(line, false);
-        defer allocator.free(res1);
-        //const res2 = layers[25].compute(line, false);
-        //defer allocator.free(res2);
-
-        part1 += n * res1.len;
+        part1 += n * layers[2].compute(line, false);
+        part2 += n * layers[25].compute(line, false);
     }
 
-    info("{}\n", .{part1});
+    info("{}\n{}\n", .{ part1, part2 });
 }
