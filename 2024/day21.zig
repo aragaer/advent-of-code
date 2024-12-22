@@ -56,12 +56,8 @@ const Layer = struct {
             @memcpy(m[0..butlast.len], perm);
             m[butlast.len] = 'B';
             const attempt = p.compute(m, true);
-            if (best) |best_so_far| {
-                if (attempt < best_so_far)
-                    best = attempt;
-            } else {
+            if (best == null or attempt < best.?)
                 best = attempt;
-            }
         }
         res.value_ptr.* = best.?;
         return best.?;
@@ -77,7 +73,7 @@ const Layer = struct {
         return result;
     }
 
-    fn init(allocator: std.mem.Allocator, prev: ?*Layer) !Layer {
+    fn init(allocator: std.mem.Allocator, prev: ?*Layer) Layer {
         return Layer{ .cache = Cache.init(allocator), .prev = prev };
     }
 
@@ -166,7 +162,7 @@ pub fn main() !void {
 
     for (0..layers.len) |idx| {
         const prev = if (idx == 0) null else &layers[idx - 1];
-        layers[idx] = try Layer.init(allocator, prev);
+        layers[idx] = Layer.init(allocator, prev);
     }
 
     var part1: usize = 0;
