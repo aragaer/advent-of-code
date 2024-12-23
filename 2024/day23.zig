@@ -2,6 +2,7 @@ const std = @import("std");
 
 const info = std.debug.print;
 const Id = usize;
+const Key = usize;
 const Name = []const u8;
 
 const Node = struct {
@@ -27,7 +28,15 @@ const Node = struct {
 };
 
 var nodes: std.ArrayList(Node) = undefined;
-var links: std.AutoHashMap([2]Id, void) = undefined;
+var links: std.AutoHashMap(Key, void) = undefined;
+
+inline fn mkKey(f: Id, s: Id) Key {
+    return f << 10 | s;
+}
+
+inline fn unKey(k: Key) [2]Id {
+    return .{ k >> 10, k & 1023 };
+}
 
 fn nameLessThan(_: void, f: Name, s: Name) bool {
     return std.mem.lessThan(u8, f, s);
@@ -44,89 +53,77 @@ fn solve_part1() !void {
 
     var linkiter = links.keyIterator();
     while (linkiter.next()) |link| {
-        const f = link[0];
-        const s = link[1];
-        if (f > s)
+        const ks = unKey(link.*);
+        if (ks[0] > ks[1])
             continue;
-        const n2 = nodes.items[s].neighbours;
-        var iter = nodes.items[f].neighbours.keyIterator();
+        var iter = nodes.items[ks[0]].neighbours.keyIterator();
         while (iter.next()) |nf| {
-            if (!n2.contains(nf.*))
+            if (!links.contains(mkKey(nf.*, ks[1])))
                 continue;
-            var triple: [3]Name = .{ nodes.items[f].name, nodes.items[s].name, nodes.items[nf.*].name };
+            var triple: [3]Name = undefined;
+            var have_t = false;
+            for ([3]Id{ ks[0], ks[1], nf.* }, 0..) |i, idx| {
+                triple[idx] = nodes.items[i].name;
+                have_t = have_t or triple[idx][0] == 't';
+            }
+            if (!have_t)
+                continue;
             std.mem.sort(Name, &triple, {}, nameLessThan);
             const sorted = try std.mem.join(nodes.allocator, ",", &triple);
-            const r = try triples.getOrPut(sorted);
-            if (r.found_existing)
+            if ((try triples.getOrPut(sorted)).found_existing)
                 nodes.allocator.free(sorted);
         }
     }
-
-    var part1: usize = 0;
-    var iter = triples.keyIterator();
-    while (iter.next()) |triple| {
-        if (triple.*[0] == 't' or triple.*[3] == 't' or triple.*[6] == 't')
-            part1 += 1;
-    }
-    info("{}\n", .{part1});
+    info("{}\n", .{triples.count()});
 }
 
 const NodeSet = std.ArrayList(Id);
 
+// based on
 // https://www.geeksforgeeks.org/maximal-clique-problem-recursive-solution/
-fn bronKerbosch(clique: *NodeSet, candidates: *NodeSet, checked: *NodeSet, cliques: *std.ArrayList(NodeSet)) !void {
-    defer candidates.deinit();
-    defer checked.deinit();
-    if (candidates.items.len == 0 and checked.items.len == 0) {
-        try cliques.append(clique.*);
+fn bronKerbosch(cl: *NodeSet, cd: *NodeSet, ch: *NodeSet, best: *NodeSet) !void {
+    defer cd.deinit();
+    defer ch.deinit();
+    if (cd.items.len == 0 and ch.items.len == 0) {
+        if (cl.items.len > best.items.len) {
+            best.deinit();
+            best.* = cl.*;
+        } else cl.deinit();
         return;
     }
-    defer clique.deinit();
+    defer cl.deinit();
 
-    while (candidates.popOrNull()) |candidate| {
-        var new_clique = try clique.clone();
-        try new_clique.append(candidate);
-        var new_candidates = NodeSet.init(clique.allocator);
-        for (candidates.items) |other| {
-            if (links.contains(.{ candidate, other }))
-                try new_candidates.append(other);
+    while (cd.popOrNull()) |candidate| {
+        var ncl = try cl.clone();
+        try ncl.append(candidate);
+        var ncd = NodeSet.init(cl.allocator);
+        for (cd.items) |other| {
+            if (links.contains(mkKey(candidate, other)))
+                try ncd.append(other);
         }
-        var new_checked = NodeSet.init(clique.allocator);
-        for (checked.items) |other| {
-            if (links.contains(.{ candidate, other }))
-                try new_checked.append(other);
+        var nch = NodeSet.init(cl.allocator);
+        for (ch.items) |other| {
+            if (links.contains(mkKey(candidate, other)))
+                try nch.append(other);
         }
-        bronKerbosch(&new_clique, &new_candidates, &new_checked, cliques) catch @panic("recur");
-        try checked.append(candidate);
+        bronKerbosch(&ncl, &ncd, &nch, best) catch @panic("recur");
+        try ch.append(candidate);
     }
 }
 
 fn solve_part2() !void {
-    var cliques = std.ArrayList(NodeSet).init(nodes.allocator);
-    defer {
-        for (cliques.items) |*item|
-            item.deinit();
-        cliques.deinit();
-    }
-    var empty1 = NodeSet.init(nodes.allocator);
-    var empty2 = NodeSet.init(nodes.allocator);
+    var e1 = NodeSet.init(nodes.allocator);
+    var e2 = NodeSet.init(nodes.allocator);
+    var clique = NodeSet.init(nodes.allocator);
     var all = NodeSet.init(nodes.allocator);
     for (0..nodes.items.len) |idx|
         try all.append(idx);
 
-    bronKerbosch(&empty1, &all, &empty2, &cliques) catch @panic("recur");
-
-    var best: usize = 0;
-    var best_size: usize = 0;
-    for (cliques.items, 0..) |clique, idx|
-        if (clique.items.len > best_size) {
-            best_size = clique.items.len;
-            best = idx;
-        };
-
+    bronKerbosch(&e1, &all, &e2, &clique) catch @panic("recur");
+    defer clique.deinit();
     var buf = std.ArrayList(Name).init(nodes.allocator);
     defer buf.deinit();
-    for (cliques.items[best].items) |node|
+    for (clique.items) |node|
         try buf.append(nodes.items[node].name);
     std.mem.sort(Name, buf.items, {}, nameLessThan);
     info("{s}", .{buf.items[0]});
@@ -155,28 +152,22 @@ pub fn main() !void {
     var buf: [10]u8 = undefined;
     const reader = std.io.getStdIn().reader();
     while (try reader.readUntilDelimiterOrEof(&buf, '\n')) |line| {
-        const n1 = try allocator.dupe(u8, line[0..2]);
-        const n2 = try allocator.dupe(u8, line[3..5]);
-        const f = try seen.getOrPut(n1);
-        if (f.found_existing) {
-            allocator.free(n1);
-        } else {
-            f.value_ptr.* = nodes.items.len;
-            try nodes.append(Node.init(allocator, n1));
+        var ids: [2]Id = undefined;
+        for (0..2) |idx| {
+            const n = try allocator.dupe(u8, line[(idx * 3)..(idx * 3 + 2)]);
+            const f = try seen.getOrPut(n);
+            if (f.found_existing)
+                allocator.free(n)
+            else {
+                f.value_ptr.* = nodes.items.len;
+                try nodes.append(Node.init(allocator, n));
+            }
+            ids[idx] = f.value_ptr.*;
         }
-        const fid = f.value_ptr.*;
-        const s = try seen.getOrPut(n2);
-        if (s.found_existing) {
-            allocator.free(n2);
-        } else {
-            s.value_ptr.* = nodes.items.len;
-            try nodes.append(Node.init(allocator, n2));
-        }
-        const sid = s.value_ptr.*;
-        try links.put(.{ fid, sid }, void{});
-        try links.put(.{ sid, fid }, void{});
-        try nodes.items[fid].append(sid);
-        try nodes.items[sid].append(fid);
+        try links.put(mkKey(ids[0], ids[1]), void{});
+        try links.put(mkKey(ids[1], ids[0]), void{});
+        try nodes.items[ids[0]].append(ids[1]);
+        try nodes.items[ids[1]].append(ids[0]);
     }
 
     try solve_part1();
