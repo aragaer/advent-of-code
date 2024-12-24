@@ -52,18 +52,6 @@ fn get_signal(id: usize) u1 {
     return res;
 }
 
-fn set(v1: usize, v2: usize) !void {
-    signals.clearRetainingCapacity();
-    var args = [2]usize{ v1, v2 };
-    for (0..2) |arg| {
-        for (0..bits[arg].len) |idx| {
-            const id = bits[arg][bits[arg].len - idx - 1];
-            try signals.put(id, @as(u1, @intCast(args[arg] & 1)));
-            args[arg] >>= 1;
-        }
-    }
-}
-
 fn calc() usize {
     var res: usize = 0;
     for (bits[2]) |zname|
@@ -227,23 +215,19 @@ pub fn main() !void {
         if (idx == register_cnt) {
             out = o1;
             carry = find(x, y, Op.AND).?;
-        } else {
-            const res1 = find_or_fix(o1, carry, Op.XOR);
-            carry = res1[2];
-
-            out = res1[0];
-            const res2 = find_or_fix(res1[1], res1[2], Op.AND);
-
-            const c1 = find(x, y, Op.AND).?;
-            const c2 = res2[0];
-            const res3 = find_or_fix(c1, c2, Op.OR);
-            carry = res3[0];
-            out = find(res1[1], res1[2], Op.XOR).?;
-            if (out != z) {
-                swap(z, out);
-                out = z;
-                carry = find(res3[1], res3[2], Op.OR).?;
-            }
+            continue;
+        }
+        const res1 = find_or_fix(o1, carry, Op.XOR);
+        carry = res1[2];
+        out = res1[0];
+        const res2 = find_or_fix(res1[1], res1[2], Op.AND);
+        const res3 = find_or_fix(find(x, y, Op.AND).?, res2[0], Op.OR);
+        carry = res3[0];
+        out = find(res1[1], res1[2], Op.XOR).?;
+        if (out != z) {
+            swap(z, out);
+            out = z;
+            carry = find(res3[1], res3[2], Op.OR).?;
         }
     }
 
