@@ -26,42 +26,33 @@ let first_after x k = let l = String.length x in
   else
     first + List.fold_right (carry first) (List.of_seq rest) 0;;
 
-let last_before x k = let res = first_after x k in
-  let num = string_of_int res
-    |> Seq.repeat
-    |> Seq.take k
-    |> List.of_seq
-    |> String.concat "" in
-  if String.equal num x then res else res - 1;;
-
-module IntSet = Set.Make(Int);;
+let last_before x k =
+  let xn = int_of_string x |> (+) 1 |> string_of_int in
+  (first_after xn k) - 1
 
 let primes =
   let cached = ref [2] in
   fun x ->
-    for i = List.hd !cached to x do
+    for i = (List.hd !cached) + 1 to x do
       if not @@ List.exists (fun f -> i mod f == 0) !cached then
         cached := i :: !cached;
     done;
-    List.rev !cached;;
+    !cached;;
 
 let f x = let s, e = match String.split_on_char '-' x with
   | [s;e] -> s, e;
   | _ -> Printf.eprintf "\"%s\" is not separated with -" x ; exit 1 in
-  let p1, p2 = ref IntSet.empty, ref IntSet.empty in
+  let p1, p2 = Hashtbl.create 1000, Hashtbl.create 1000 in
   let f2 n =
-    let start, stop = first_after s n, last_before e n in
-    for i = start to stop do
+    for i = first_after s n to last_before e n do
       let s = string_of_int i in
       let c = Seq.repeat s |> Seq.take n |> List.of_seq |> String.concat "" in
       let v = int_of_string c in
-      if n == 2 then
-        p1 := IntSet.add v !p1;
-      p2 := IntSet.add v !p2
+      Hashtbl.add (if n == 2 then p1 else p2) v true;
     done in
   List.iter f2 (primes @@ String.length e);
-  let r1 = IntSet.elements !p1 |> List.fold_left (+) 0 in
-  let r2 = IntSet.elements !p2 |> List.fold_left (+) 0 in
+  let r1 = Hashtbl.to_seq_keys p1 |> Seq.fold_left (+) 0 in
+  let r2 = Hashtbl.to_seq_keys p2 |> Seq.fold_left (+) r1 in
   r1, r2;;
 
 let r1, r2 = ref 0, ref 0 in
