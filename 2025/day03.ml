@@ -28,4 +28,3 @@ try
 with
 | End_of_file -> Printf.printf "%d\n%d\n" !res1 !res2
 | e -> Printf.eprintf "Error: %s\n" (Printexc.to_string e); exit 1;;
-
