@@ -7,7 +7,7 @@ let id_of node = match Hashtbl.find_opt n2i node with
     Hashtbl.add n2i node i;
     i;;
 
-let solve1 edge_data =
+let solve edge_data =
   let n = Hashtbl.length n2i in
   let children = Array.make n [] in
   List.iter (fun (p,c) -> children.(p) <- c) edge_data;
@@ -15,7 +15,6 @@ let solve1 edge_data =
 
   let counts = Array.make_matrix n n (-1) in
   let count_paths_to sink =
-    Printf.printf "counting paths to %d\n%!" sink;
     counts.(sink).(sink) <- 1;
     let rec count_paths unvisited =
       match List.find_opt (fun n ->
@@ -28,25 +27,23 @@ let solve1 edge_data =
     count_paths (List.filter ((<>) (sink)) ids) in
 
   let counted = ref [] in
-  let num_paths node1 node2 =
-    let t = id_of node2 in
-    if not @@ List.mem t !counted then begin
-      count_paths_to t;
-      counted := t :: !counted;
-    end;
-    counts.(t).(id_of node1) in
+  let answer route =
+    let hop node1 node2 =
+      let t = id_of node2 in
+      if not @@ List.mem t !counted then begin
+        count_paths_to t;
+        counted := t :: !counted;
+      end;
+      counts.(t).(id_of node1) in
+    if List.for_all (Hashtbl.mem n2i) route then
+      let rs = List.to_seq route in
+      Seq.map2 hop rs (Seq.drop 1 rs)
+      |> Seq.fold_left ( * ) 1
+    else Int.max_int in
 
-  if Hashtbl.mem n2i "you" then
-    Printf.printf "%d\n%!" @@ num_paths "you" "out";
-
-  let num_route r =
-    let rs = List.to_seq r in
-    Seq.map2 num_paths rs (Seq.drop 1 rs)
-    |> Seq.fold_left ( * ) 1 in
-
-  if Hashtbl.mem n2i "svr" then
-    Printf.printf "%d\n" @@ (max (num_route ["svr";"fft";"dac";"out"])
-                               (num_route ["svr";"dac";"fft";"out"]));;
+  Printf.printf "%d\n" @@ answer["you";"out"];
+  Printf.printf "%d\n" @@ ((answer ["svr";"fft";"dac";"out"]) +
+                           (answer ["svr";"dac";"fft";"out"]));;
 
 
 let edge_data = ref [] in
@@ -61,5 +58,5 @@ try
     edge_data := (id_of parent, List.map id_of children) :: !edge_data;
   done;
 with
-| End_of_file -> solve1 !edge_data
+| End_of_file -> solve !edge_data
 | e -> Printf.eprintf "Error: %s\n" (Printexc.to_string e); exit 1;;
